@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Base XML theme for the Activity window. The actual UI colors are driven by
+      Compose (MipubleTheme); this only styles the window before Compose draws.
+    -->
+    <style name="Theme.Mipuble" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/white</item>
+    </style>
+</resources>
