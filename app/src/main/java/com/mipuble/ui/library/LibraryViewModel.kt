@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mipuble.domain.model.Book
 import com.mipuble.domain.sort.BookSortOption
+import com.mipuble.domain.usecase.ImportEpubUseCase
 import com.mipuble.domain.usecase.ObserveLibraryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -14,6 +15,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 data class LibraryUiState(
     val isLoading: Boolean = true,
@@ -24,9 +27,14 @@ data class LibraryUiState(
 @HiltViewModel
 class LibraryViewModel @Inject constructor(
     observeLibrary: ObserveLibraryUseCase,
+    private val importEpub: ImportEpubUseCase,
 ) : ViewModel() {
 
     private val sortOption = MutableStateFlow(BookSortOption.TITLE_NATURAL)
+
+    /** One-off user-facing messages (import results, unavailable books). */
+    private val _messages = MutableStateFlow<String?>(null)
+    val messages: StateFlow<String?> = _messages
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val uiState: StateFlow<LibraryUiState> = sortOption
@@ -47,5 +55,21 @@ class LibraryViewModel @Inject constructor(
 
     fun onSortSelected(option: BookSortOption) {
         sortOption.value = option
+    }
+
+    fun onImport(uriString: String) {
+        viewModelScope.launch {
+            importEpub(uriString)
+                .onSuccess { _messages.update { "Book added to your library." } }
+                .onFailure { _messages.update { "Couldn't import that file — is it a valid EPUB?" } }
+        }
+    }
+
+    fun onUnavailableBook() {
+        _messages.update { "This book isn't downloaded yet." }
+    }
+
+    fun onMessageShown() {
+        _messages.update { null }
     }
 }

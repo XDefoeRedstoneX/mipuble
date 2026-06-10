@@ -1,9 +1,13 @@
 package com.mipuble.ui.library
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -14,47 +18,86 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil.compose.AsyncImage
 import com.mipuble.domain.model.Book
 import com.mipuble.domain.sort.BookSortOption
 import com.mipuble.ui.theme.MipubleTheme
+import java.io.File
 import kotlin.math.absoluteValue
 
 @Composable
-fun LibraryScreen(viewModel: LibraryViewModel = hiltViewModel()) {
+fun LibraryScreen(
+    onOpenBook: (Long) -> Unit,
+    viewModel: LibraryViewModel = hiltViewModel(),
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    LibraryContent(uiState = uiState, onSortSelected = viewModel::onSortSelected)
+    val message by viewModel.messages.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(message) {
+        message?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.onMessageShown()
+        }
+    }
+
+    // System file picker scoped to EPUBs (with a wildcard fallback for devices
+    // that don't recognize the EPUB MIME type).
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let { viewModel.onImport(it.toString()) } }
+
+    LibraryContent(
+        uiState = uiState,
+        snackbarHostState = snackbarHostState,
+        onSortSelected = viewModel::onSortSelected,
+        onImportClick = { picker.launch(arrayOf("application/epub+zip", "*/*")) },
+        onBookClick = { book ->
+            if (book.isDownloaded) onOpenBook(book.id) else viewModel.onUnavailableBook()
+        },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LibraryContent(
     uiState: LibraryUiState,
+    snackbarHostState: SnackbarHostState,
     onSortSelected: (BookSortOption) -> Unit,
+    onImportClick: () -> Unit,
+    onBookClick: (Book) -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -65,6 +108,12 @@ fun LibraryContent(
                 },
             )
         },
+        floatingActionButton = {
+            FloatingActionButton(onClick = onImportClick) {
+                Icon(Icons.Default.Add, contentDescription = "Import EPUB")
+            }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         when {
             uiState.isLoading -> Unit
@@ -77,7 +126,7 @@ fun LibraryContent(
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
-                        text = "Your library is empty",
+                        text = "Your library is empty.\nTap + to import an EPUB.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -90,12 +139,12 @@ fun LibraryContent(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding),
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+                    contentPadding = PaddingValues(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     items(uiState.books, key = { it.id }) { book ->
-                        BookCard(book = book)
+                        BookCard(book = book, onClick = { onBookClick(book) })
                     }
                 }
             }
@@ -140,10 +189,13 @@ private val BookSortOption.label: String
     }
 
 @Composable
-private fun BookCard(book: Book, modifier: Modifier = Modifier) {
-    Column(modifier = modifier) {
-        // Placeholder cover until Phase 2 extracts real cover images:
-        // a stable per-title color with the title as cover text.
+private fun BookCard(book: Book, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clickable(onClick = onClick)
+            // Books not yet on the device read as dimmed (foreshadows Phase 5).
+            .alpha(if (book.isDownloaded) 1f else 0.55f),
+    ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -152,14 +204,23 @@ private fun BookCard(book: Book, modifier: Modifier = Modifier) {
                 .background(book.placeholderCoverColor()),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = book.title,
-                style = MaterialTheme.typography.labelLarge,
-                color = Color.White,
-                maxLines = 4,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(8.dp),
-            )
+            if (book.coverPath != null) {
+                AsyncImage(
+                    model = File(book.coverPath),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                Text(
+                    text = book.title,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(8.dp),
+                )
+            }
         }
         if (book.progress > 0f) {
             LinearProgressIndicator(
@@ -212,10 +273,14 @@ private fun LibraryContentPreview() {
                         author = "Mira Holt",
                         addedAtEpochMillis = 0L,
                         progress = if (index == 0) 0.6f else 0f,
+                        filePath = if (index == 0) "/tmp/x.epub" else null,
                     )
                 },
             ),
+            snackbarHostState = remember { SnackbarHostState() },
             onSortSelected = {},
+            onImportClick = {},
+            onBookClick = {},
         )
     }
 }

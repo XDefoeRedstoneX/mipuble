@@ -38,7 +38,7 @@ Built in phases. See `CLAUDE.md` for the roadmap and current progress.
 
 - [x] **Phase 0** — Foundation & tooling (buildable skeleton, CI)
 - [x] **Phase 1** — Library screen + natural sorting
-- [ ] **Phase 2** — EPUB parsing & reader rendering
+- [x] **Phase 2** — EPUB parsing & reader rendering
 - [ ] **Phase 3** — Reader UX + precise brightness
 - [ ] **Phase 4** — Custom organization (colors + drag-and-drop)
 - [ ] **Phase 5** — Download on demand (Google Drive)

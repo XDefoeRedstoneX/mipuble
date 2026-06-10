@@ -55,7 +55,11 @@ CI (`.github/workflows/ci.yml`) runs lint + unit tests + assembleDebug on every 
 - **Phase 1** ✅ Library screen + natural sorting (the `NaturalOrderComparator`).
   Room-backed library seeded with demo books; sorting happens in the domain
   layer (`ObserveLibraryUseCase`) because SQLite can't express natural order.
-- **Phase 2** Custom EPUB parser (container.xml → OPF → spine) + WebView reader.
+- **Phase 2** ✅ Custom EPUB parser (container.xml → OPF → spine) + WebView reader.
+  Parser is pure JVM (DOM, no Android) so it's unit-tested without Robolectric.
+  Reader is the MVI showcase screen; chapters stream from the zip via a WebView
+  `shouldInterceptRequest` bridge — the book is never unpacked to disk. Books
+  imported via SAF; a bundled `sample.epub` is seeded on first launch.
 - **Phase 3** Reader UX + precise ±1% brightness via window attributes; themes via DataStore.
 - **Phase 4** Categories (colors) + drag-and-drop persisted ordering.
 - **Phase 5** Google Drive metadata-only library + on-demand download/eviction.

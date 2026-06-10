@@ -12,6 +12,9 @@ data class BookEntity(
     val author: String,
     @ColumnInfo(name = "added_at") val addedAt: Long,
     val progress: Float = 0f,
+    @ColumnInfo(name = "file_path") val filePath: String? = null,
+    @ColumnInfo(name = "cover_path") val coverPath: String? = null,
+    @ColumnInfo(name = "last_chapter_index") val lastChapterIndex: Int = 0,
 )
 
 fun BookEntity.toDomain() = Book(
@@ -20,4 +23,7 @@ fun BookEntity.toDomain() = Book(
     author = author,
     addedAtEpochMillis = addedAt,
     progress = progress,
+    filePath = filePath,
+    coverPath = coverPath,
+    lastChapterIndex = lastChapterIndex,
 )

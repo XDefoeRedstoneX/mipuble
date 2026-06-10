@@ -11,4 +11,13 @@ data class Book(
     val addedAtEpochMillis: Long,
     /** Reading progress in 0f..1f; 0f means unopened. */
     val progress: Float,
-)
+    /** Local EPUB path, or null when the book's bytes aren't on the device yet. */
+    val filePath: String? = null,
+    /** Local cover image path, or null to fall back to a generated placeholder. */
+    val coverPath: String? = null,
+    /** Spine index to resume at when reopening. */
+    val lastChapterIndex: Int = 0,
+) {
+    /** Whether the book can actually be opened in the reader. */
+    val isDownloaded: Boolean get() = filePath != null
+}

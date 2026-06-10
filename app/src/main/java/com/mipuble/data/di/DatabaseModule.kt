@@ -5,8 +5,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.mipuble.data.local.BookDao
+import com.mipuble.data.local.DatabaseSeeder
 import com.mipuble.data.local.MipubleDatabase
-import com.mipuble.data.local.SeedData
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -25,17 +25,18 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(
         @ApplicationContext context: Context,
-        // Provider breaks the circular dependency: the callback needs the DAO,
+        // Provider breaks the circular dependency: the seeder needs the DAO,
         // but the DAO comes from the database being built here. By the time
         // onCreate fires (first query), the singleton already exists.
-        daoProvider: Provider<BookDao>,
+        seederProvider: Provider<DatabaseSeeder>,
         @ApplicationScope scope: CoroutineScope,
     ): MipubleDatabase =
         Room.databaseBuilder(context, MipubleDatabase::class.java, "mipuble.db")
+            .addMigrations(MipubleDatabase.MIGRATION_1_2)
             .addCallback(
                 object : RoomDatabase.Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {
-                        scope.launch { daoProvider.get().insertAll(SeedData.books) }
+                        scope.launch { seederProvider.get().seed() }
                     }
                 },
             )

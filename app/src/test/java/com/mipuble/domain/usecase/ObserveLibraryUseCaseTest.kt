@@ -21,11 +21,14 @@ class ObserveLibraryUseCaseTest {
         book(3, "Vol 2", addedAt = 20),
     )
 
-    private val repository = object : BookRepository {
-        override fun observeBooks(): Flow<List<Book>> = flowOf(library)
+    private fun repositoryOf(books: List<Book>) = object : BookRepository {
+        override fun observeBooks(): Flow<List<Book>> = flowOf(books)
+        override suspend fun getBook(id: Long): Book? = books.firstOrNull { it.id == id }
+        override suspend fun updateReadingPosition(id: Long, chapter: Int, progress: Float) = Unit
+        override suspend fun importBook(uriString: String): Result<Long> = Result.success(0L)
     }
 
-    private val useCase = ObserveLibraryUseCase(repository)
+    private val useCase = ObserveLibraryUseCase(repositoryOf(library))
 
     @Test
     fun `natural sort shelves volumes in reading order`() = runTest {
@@ -55,11 +58,7 @@ class ObserveLibraryUseCaseTest {
             book(2, "Vol 2", author = "Zoe"),
             book(3, "Standalone", author = "Adam"),
         )
-        val useCase = ObserveLibraryUseCase(
-            object : BookRepository {
-                override fun observeBooks(): Flow<List<Book>> = flowOf(mixed)
-            },
-        )
+        val useCase = ObserveLibraryUseCase(repositoryOf(mixed))
 
         val result = useCase(BookSortOption.AUTHOR).first()
 
