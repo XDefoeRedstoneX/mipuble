@@ -1,6 +1,11 @@
 package com.mipuble.ui.reader
 
-import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.view.GestureDetector
+import android.view.MotionEvent
+import android.view.WindowManager
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
@@ -10,8 +15,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -22,15 +29,21 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mipuble.domain.model.ReaderPreferences
 import java.io.ByteArrayInputStream
 
 @Composable
@@ -39,12 +52,54 @@ fun ReaderScreen(
     viewModel: ReaderViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    ApplyBrightness(state.preferences)
+
     ReaderContent(
         state = state,
         onEvent = viewModel::onEvent,
         readResource = viewModel::readResource,
         onBack = onBack,
     )
+
+    if (state.showSettings) {
+        ReaderSettingsSheet(
+            preferences = state.preferences,
+            onEvent = viewModel::onEvent,
+            onDismiss = { viewModel.onEvent(ReaderEvent.CloseSettings) },
+        )
+    }
+}
+
+/**
+ * Overrides the window's brightness while reading, in exact 0.01 steps, and
+ * restores the system default when leaving the screen. This window-attribute
+ * approach is what lets the reader go far dimmer (and more precisely) than the
+ * OS quick-settings slider allows.
+ */
+@Composable
+private fun ApplyBrightness(preferences: ReaderPreferences) {
+    val activity = LocalContext.current.findActivity()
+
+    LaunchedEffect(preferences.followSystemBrightness, preferences.brightnessPercent) {
+        val window = activity?.window ?: return@LaunchedEffect
+        window.attributes = window.attributes.apply {
+            screenBrightness = if (preferences.followSystemBrightness) {
+                WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            } else {
+                (preferences.brightnessPercent / 100f).coerceIn(0.01f, 1f)
+            }
+        }
+    }
+
+    DisposableEffect(activity) {
+        onDispose {
+            val window = activity?.window ?: return@onDispose
+            window.attributes = window.attributes.apply {
+                screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -57,29 +112,32 @@ private fun ReaderContent(
 ) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = state.bookTitle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to library")
-                    }
-                },
-            )
+            AnimatedVisibility(visible = state.showControls) {
+                TopAppBar(
+                    title = {
+                        Text(state.bookTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to library")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { onEvent(ReaderEvent.OpenSettings) }) {
+                            Icon(Icons.Default.Settings, contentDescription = "Reading settings")
+                        }
+                    },
+                )
+            }
         },
         bottomBar = {
-            if (state.error == null && !state.isLoading) {
+            AnimatedVisibility(visible = state.showControls && state.error == null && !state.isLoading) {
                 BottomAppBar {
                     IconButton(
                         onClick = { onEvent(ReaderEvent.PreviousChapter) },
                         enabled = state.hasPrevious,
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous chapter")
+                        Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Previous chapter")
                     }
                     Text(
                         text = "${state.currentChapter + 1} / ${state.chapterCount}",
@@ -90,7 +148,7 @@ private fun ReaderContent(
                         onClick = { onEvent(ReaderEvent.NextChapter) },
                         enabled = state.hasNext,
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next chapter")
+                        Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Next chapter")
                     }
                 }
             }
@@ -111,7 +169,9 @@ private fun ReaderContent(
                 )
                 state.chapterUrl != null -> ChapterWebView(
                     chapterUrl = state.chapterUrl,
+                    preferences = state.preferences,
                     readResource = readResource,
+                    onToggleControls = { onEvent(ReaderEvent.ToggleControls) },
                 )
             }
         }
@@ -119,16 +179,26 @@ private fun ReaderContent(
 }
 
 /**
- * Hosts a WebView and intercepts every request under the virtual epub origin,
- * answering it with bytes streamed straight from the open EPUB zip. The
- * WebView never sees the network or the filesystem.
+ * Hosts a WebView that streams chapters from the open EPUB and themes them by
+ * injecting an override stylesheet into the served HTML bytes — no JavaScript
+ * is enabled. Font scaling uses WebView.textZoom; theme/spacing changes reload
+ * the current chapter so the fresh stylesheet is injected.
  */
-@SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun ChapterWebView(
     chapterUrl: String,
+    preferences: ReaderPreferences,
     readResource: (String) -> ByteArray?,
+    onToggleControls: () -> Unit,
 ) {
+    val backgroundArgb = ReaderThemeColors.of(preferences.theme).background.toArgb()
+    // Read latest values inside the long-lived WebViewClient/listener closures.
+    val css = rememberUpdatedState(readerOverrideCss(preferences))
+    val toggle = rememberUpdatedState(onToggleControls)
+
+    // A change to these requires re-injecting CSS, i.e. reloading the chapter.
+    val cssSignature = "${preferences.theme}:${preferences.lineSpacingPercent}"
+
     val client = remember(readResource) {
         object : WebViewClient() {
             override fun shouldInterceptRequest(
@@ -142,11 +212,13 @@ private fun ChapterWebView(
 
                 val entry = path.removePrefix(EpubWebViewBridge.PATH_PREFIX)
                 val bytes = readResource(entry) ?: return null
-                return WebResourceResponse(
-                    EpubWebViewBridge.mimeTypeFor(entry),
-                    "UTF-8",
-                    ByteArrayInputStream(bytes),
-                )
+                val mime = EpubWebViewBridge.mimeTypeFor(entry)
+
+                if (mime == "text/html") {
+                    val html = injectStylesheet(String(bytes, Charsets.UTF_8), css.value)
+                    return WebResourceResponse(mime, "UTF-8", ByteArrayInputStream(html.toByteArray(Charsets.UTF_8)))
+                }
+                return WebResourceResponse(mime, "UTF-8", ByteArrayInputStream(bytes))
             }
         }
     }
@@ -158,13 +230,51 @@ private fun ChapterWebView(
                 settings.javaScriptEnabled = false
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
+
+                val gestureDetector = GestureDetector(
+                    context,
+                    object : GestureDetector.SimpleOnGestureListener() {
+                        override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                            toggle.value.invoke()
+                            return true
+                        }
+                    },
+                )
+                // Returning false lets the WebView keep handling scroll gestures.
+                setOnTouchListener { _, event -> gestureDetector.onTouchEvent(event); false }
             }
         },
         update = { webView ->
-            if (webView.url != chapterUrl) {
-                webView.loadUrl(chapterUrl)
+            webView.settings.textZoom = preferences.fontScalePercent
+            webView.setBackgroundColor(backgroundArgb)
+
+            val needsReload = webView.getTag(R_CSS) != cssSignature
+            when {
+                webView.url != chapterUrl -> webView.loadUrl(chapterUrl)
+                needsReload -> webView.reload()
             }
+            webView.setTag(R_CSS, cssSignature)
         },
         modifier = Modifier.fillMaxSize(),
     )
+}
+
+/** Inserts the override stylesheet just before </head> (or prepends if absent). */
+private fun injectStylesheet(html: String, css: String): String {
+    val style = "<style id=\"mipuble-overrides\">$css</style>"
+    val headClose = html.indexOf("</head>", ignoreCase = true)
+    return if (headClose >= 0) {
+        html.substring(0, headClose) + style + html.substring(headClose)
+    } else {
+        style + html
+    }
+}
+
+// Stable view tag id for tracking the injected stylesheet signature.
+private const val R_CSS = 0x6D69_7002
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }

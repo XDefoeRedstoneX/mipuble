@@ -60,7 +60,12 @@ CI (`.github/workflows/ci.yml`) runs lint + unit tests + assembleDebug on every 
   Reader is the MVI showcase screen; chapters stream from the zip via a WebView
   `shouldInterceptRequest` bridge — the book is never unpacked to disk. Books
   imported via SAF; a bundled `sample.epub` is seeded on first launch.
-- **Phase 3** Reader UX + precise ±1% brightness via window attributes; themes via DataStore.
+- **Phase 3** ✅ Reader UX + precise ±1% brightness via window attributes; themes via DataStore.
+  Brightness overrides `Window.attributes.screenBrightness` only while reading and
+  restores the system default on exit. Themes/font/line-spacing persist in DataStore;
+  theme + spacing apply by injecting an override stylesheet into the served HTML
+  bytes (JS stays disabled), font via `WebView.textZoom`. Stepping/clamping rules
+  live in the pure `ReaderSettingsBounds` (unit-tested).
 - **Phase 4** Categories (colors) + drag-and-drop persisted ordering.
 - **Phase 5** Google Drive metadata-only library + on-demand download/eviction.
 - **Phase 6** Multi-module split, broad test coverage, a11y, polish.
