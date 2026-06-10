@@ -52,7 +52,9 @@ CI (`.github/workflows/ci.yml`) runs lint + unit tests + assembleDebug on every 
 ## Roadmap
 
 - **Phase 0** ✅ Foundation & tooling.
-- **Phase 1** Library screen + natural sorting (the `NaturalOrderComparator`).
+- **Phase 1** ✅ Library screen + natural sorting (the `NaturalOrderComparator`).
+  Room-backed library seeded with demo books; sorting happens in the domain
+  layer (`ObserveLibraryUseCase`) because SQLite can't express natural order.
 - **Phase 2** Custom EPUB parser (container.xml → OPF → spine) + WebView reader.
 - **Phase 3** Reader UX + precise ±1% brightness via window attributes; themes via DataStore.
 - **Phase 4** Categories (colors) + drag-and-drop persisted ordering.

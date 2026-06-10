@@ -37,7 +37,7 @@ Requirements: JDK 17, Android SDK (compileSdk 35), minSdk 26.
 Built in phases. See `CLAUDE.md` for the roadmap and current progress.
 
 - [x] **Phase 0** — Foundation & tooling (buildable skeleton, CI)
-- [ ] **Phase 1** — Library screen + natural sorting
+- [x] **Phase 1** — Library screen + natural sorting
 - [ ] **Phase 2** — EPUB parsing & reader rendering
 - [ ] **Phase 3** — Reader UX + precise brightness
 - [ ] **Phase 4** — Custom organization (colors + drag-and-drop)
