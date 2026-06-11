@@ -12,8 +12,22 @@ import org.junit.Test
 
 class ObserveLibraryUseCaseTest {
 
-    private fun book(id: Long, title: String, author: String = "Author", addedAt: Long = 0L) =
-        Book(id = id, title = title, author = author, addedAtEpochMillis = addedAt, progress = 0f)
+    private fun book(
+        id: Long,
+        title: String,
+        author: String = "Author",
+        addedAt: Long = 0L,
+        categoryId: Long? = null,
+        customOrder: Long = 0L,
+    ) = Book(
+        id = id,
+        title = title,
+        author = author,
+        addedAtEpochMillis = addedAt,
+        progress = 0f,
+        categoryId = categoryId,
+        customOrder = customOrder,
+    )
 
     private val library = listOf(
         book(1, "Vol 10", addedAt = 30),
@@ -26,6 +40,8 @@ class ObserveLibraryUseCaseTest {
         override suspend fun getBook(id: Long): Book? = books.firstOrNull { it.id == id }
         override suspend fun updateReadingPosition(id: Long, chapter: Int, progress: Float) = Unit
         override suspend fun importBook(uriString: String): Result<Long> = Result.success(0L)
+        override suspend fun setBookCategory(bookId: Long, categoryId: Long?) = Unit
+        override suspend fun saveCustomOrder(orderedBookIds: List<Long>) = Unit
     }
 
     private val useCase = ObserveLibraryUseCase(repositoryOf(library))
@@ -63,5 +79,62 @@ class ObserveLibraryUseCaseTest {
         val result = useCase(BookSortOption.AUTHOR).first()
 
         assertEquals(listOf("Standalone", "Vol 2", "Vol 10"), result.map { it.title })
+    }
+
+    @Test
+    fun `custom sort follows the persisted hand-arranged order`() = runTest {
+        val arranged = listOf(
+            book(1, "First imported", customOrder = 2),
+            book(2, "Second imported", customOrder = 0),
+            book(3, "Third imported", customOrder = 1),
+        )
+        val useCase = ObserveLibraryUseCase(repositoryOf(arranged))
+
+        val result = useCase(BookSortOption.CUSTOM).first()
+
+        assertEquals(
+            listOf("Second imported", "Third imported", "First imported"),
+            result.map { it.title },
+        )
+    }
+
+    @Test
+    fun `custom sort breaks order ties by id`() = runTest {
+        val tied = listOf(
+            book(9, "Later", customOrder = 5),
+            book(4, "Earlier", customOrder = 5),
+        )
+        val useCase = ObserveLibraryUseCase(repositoryOf(tied))
+
+        val result = useCase(BookSortOption.CUSTOM).first()
+
+        assertEquals(listOf("Earlier", "Later"), result.map { it.title })
+    }
+
+    @Test
+    fun `category filter keeps only that category's books`() = runTest {
+        val shelved = listOf(
+            book(1, "Vol 2", categoryId = 7),
+            book(2, "Vol 1", categoryId = 7),
+            book(3, "Unshelved"),
+        )
+        val useCase = ObserveLibraryUseCase(repositoryOf(shelved))
+
+        val result = useCase(BookSortOption.TITLE_NATURAL, categoryId = 7).first()
+
+        assertEquals(listOf("Vol 1", "Vol 2"), result.map { it.title })
+    }
+
+    @Test
+    fun `null category filter returns everything`() = runTest {
+        val shelved = listOf(
+            book(1, "A", categoryId = 7),
+            book(2, "B"),
+        )
+        val useCase = ObserveLibraryUseCase(repositoryOf(shelved))
+
+        val result = useCase(BookSortOption.TITLE_NATURAL, categoryId = null).first()
+
+        assertEquals(2, result.size)
     }
 }

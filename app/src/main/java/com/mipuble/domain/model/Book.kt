@@ -17,6 +17,10 @@ data class Book(
     val coverPath: String? = null,
     /** Spine index to resume at when reopening. */
     val lastChapterIndex: Int = 0,
+    /** The user-defined category (shelf) this book belongs to, if any. */
+    val categoryId: Long? = null,
+    /** Position in the user's hand-arranged order; ties broken by id. */
+    val customOrder: Long = 0,
 ) {
     /** Whether the book can actually be opened in the reader. */
     val isDownloaded: Boolean get() = filePath != null

@@ -3,6 +3,7 @@ package com.mipuble.data.local
 import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Transaction
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -25,4 +26,18 @@ interface BookDao {
 
     @Query("UPDATE books SET cover_path = :coverPath WHERE id = :id")
     suspend fun updateCover(id: Long, coverPath: String)
+
+    @Query("UPDATE books SET category_id = :categoryId WHERE id = :id")
+    suspend fun updateCategory(id: Long, categoryId: Long?)
+
+    @Query("UPDATE books SET custom_order = :order WHERE id = :id")
+    suspend fun updateCustomOrder(id: Long, order: Long)
+
+    /** Writes a full drag-and-drop arrangement atomically. */
+    @Transaction
+    suspend fun saveCustomOrder(orderedIds: List<Long>) {
+        orderedIds.forEachIndexed { index, id ->
+            updateCustomOrder(id, index.toLong())
+        }
+    }
 }

@@ -66,6 +66,10 @@ CI (`.github/workflows/ci.yml`) runs lint + unit tests + assembleDebug on every 
   theme + spacing apply by injecting an override stylesheet into the served HTML
   bytes (JS stays disabled), font via `WebView.textZoom`. Stepping/clamping rules
   live in the pure `ReaderSettingsBounds` (unit-tested).
-- **Phase 4** Categories (colors) + drag-and-drop persisted ordering.
+- **Phase 4** ✅ Categories (colors) + drag-and-drop persisted ordering.
+  Categories are a Room table (name + packed ARGB color); deleting one
+  un-assigns its books atomically. Drag-and-drop is hand-rolled on
+  `LazyGridState.layoutInfo` (`ReorderableGrid.kt`) — only available in
+  "My order" sort with no filter, persisted via one transactional write.
 - **Phase 5** Google Drive metadata-only library + on-demand download/eviction.
 - **Phase 6** Multi-module split, broad test coverage, a11y, polish.

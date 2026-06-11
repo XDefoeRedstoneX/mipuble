@@ -22,4 +22,13 @@ interface BookRepository {
      * stays free of Android types). Returns the new book's id.
      */
     suspend fun importBook(uriString: String): Result<Long>
+
+    /** Assigns the book to a category, or clears it with null. */
+    suspend fun setBookCategory(bookId: Long, categoryId: Long?)
+
+    /**
+     * Persists a hand-arranged order: each book's customOrder becomes its
+     * position in [orderedBookIds].
+     */
+    suspend fun saveCustomOrder(orderedBookIds: List<Long>)
 }

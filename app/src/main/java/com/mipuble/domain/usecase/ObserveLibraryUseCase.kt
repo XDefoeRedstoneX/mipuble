@@ -9,15 +9,20 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 /**
- * The library stream the UI subscribes to: all books, sorted per the user's
- * current choice. Sorting lives here (not in SQL) because natural ordering
- * is a domain rule SQLite can't express.
+ * The library stream the UI subscribes to: books (optionally filtered to one
+ * category), sorted per the user's current choice. Sorting lives here (not in
+ * SQL) because natural ordering is a domain rule SQLite can't express.
  */
 class ObserveLibraryUseCase @Inject constructor(
     private val repository: BookRepository,
 ) {
-    operator fun invoke(sortOption: BookSortOption): Flow<List<Book>> =
+    operator fun invoke(
+        sortOption: BookSortOption,
+        categoryId: Long? = null,
+    ): Flow<List<Book>> =
         repository.observeBooks().map { books ->
-            books.sortedWith(sortOption.comparator())
+            books
+                .let { list -> categoryId?.let { id -> list.filter { it.categoryId == id } } ?: list }
+                .sortedWith(sortOption.comparator())
         }
 }

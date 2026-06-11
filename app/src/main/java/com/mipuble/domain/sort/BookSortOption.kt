@@ -12,6 +12,9 @@ enum class BookSortOption {
     TITLE_LEXICOGRAPHIC,
     AUTHOR,
     DATE_ADDED,
+
+    /** The user's own drag-and-drop arrangement, persisted per book. */
+    CUSTOM,
 }
 
 private val natural = NaturalOrderComparator()
@@ -29,4 +32,7 @@ fun BookSortOption.comparator(): Comparator<Book> = when (this) {
 
     BookSortOption.DATE_ADDED ->
         compareByDescending { it.addedAtEpochMillis }
+
+    BookSortOption.CUSTOM ->
+        compareBy({ it.customOrder }, { it.id })
 }

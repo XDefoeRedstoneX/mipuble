@@ -26,4 +26,10 @@ class BookRepositoryImpl @Inject constructor(
 
     override suspend fun importBook(uriString: String): Result<Long> =
         importer.import(uriString)
+
+    override suspend fun setBookCategory(bookId: Long, categoryId: Long?) =
+        bookDao.updateCategory(bookId, categoryId)
+
+    override suspend fun saveCustomOrder(orderedBookIds: List<Long>) =
+        bookDao.saveCustomOrder(orderedBookIds)
 }

@@ -15,6 +15,8 @@ data class BookEntity(
     @ColumnInfo(name = "file_path") val filePath: String? = null,
     @ColumnInfo(name = "cover_path") val coverPath: String? = null,
     @ColumnInfo(name = "last_chapter_index") val lastChapterIndex: Int = 0,
+    @ColumnInfo(name = "category_id") val categoryId: Long? = null,
+    @ColumnInfo(name = "custom_order") val customOrder: Long = 0,
 )
 
 fun BookEntity.toDomain() = Book(
@@ -26,4 +28,6 @@ fun BookEntity.toDomain() = Book(
     filePath = filePath,
     coverPath = coverPath,
     lastChapterIndex = lastChapterIndex,
+    categoryId = categoryId,
+    customOrder = customOrder,
 )

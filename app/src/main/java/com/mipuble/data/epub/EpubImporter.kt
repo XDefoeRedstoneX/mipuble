@@ -60,6 +60,8 @@ class EpubImporter @Inject constructor(
                 filePath = file.absolutePath,
             ),
         )
+        // New books join the end of the hand-arranged order (ids are monotonic).
+        bookDao.updateCustomOrder(id, id)
 
         epub.coverImageHref?.let { href ->
             val bytes = EpubResourceReader(file).use { it.read(href) }
