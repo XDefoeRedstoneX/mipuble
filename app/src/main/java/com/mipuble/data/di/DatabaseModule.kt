@@ -33,7 +33,11 @@ object DatabaseModule {
         @ApplicationScope scope: CoroutineScope,
     ): MipubleDatabase =
         Room.databaseBuilder(context, MipubleDatabase::class.java, "mipuble.db")
-            .addMigrations(MipubleDatabase.MIGRATION_1_2, MipubleDatabase.MIGRATION_2_3)
+            .addMigrations(
+                MipubleDatabase.MIGRATION_1_2,
+                MipubleDatabase.MIGRATION_2_3,
+                MipubleDatabase.MIGRATION_3_4,
+            )
             .addCallback(
                 object : RoomDatabase.Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {

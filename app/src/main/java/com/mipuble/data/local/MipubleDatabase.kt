@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [BookEntity::class, CategoryEntity::class],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class MipubleDatabase : RoomDatabase() {
@@ -38,6 +38,14 @@ abstract class MipubleDatabase : RoomDatabase() {
                 // Seed each book's custom slot with its id so the existing
                 // shelf order is stable until the user rearranges it.
                 db.execSQL("UPDATE books SET custom_order = id")
+            }
+        }
+
+        /** Adds remote-library fields for download-on-demand (Phase 5). */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE books ADD COLUMN remote_id TEXT")
+                db.execSQL("ALTER TABLE books ADD COLUMN remote_size_bytes INTEGER")
             }
         }
     }

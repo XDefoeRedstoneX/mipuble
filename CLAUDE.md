@@ -71,5 +71,11 @@ CI (`.github/workflows/ci.yml`) runs lint + unit tests + assembleDebug on every 
   un-assigns its books atomically. Drag-and-drop is hand-rolled on
   `LazyGridState.layoutInfo` (`ReorderableGrid.kt`) — only available in
   "My order" sort with no filter, persisted via one transactional write.
-- **Phase 5** Google Drive metadata-only library + on-demand download/eviction.
+- **Phase 5** ✅ Metadata-only remote library + on-demand download/eviction.
+  `RemoteLibrarySource` abstracts the backend: a real `DriveRemoteLibrarySource`
+  (Drive REST v3 over OkHttp, behind `DriveAuthProvider`) and a
+  `FakeRemoteLibrarySource` (bundled sample) bound by default so it runs
+  offline. Sync inserts metadata-only books (filePath=null, remoteId set);
+  download streams bytes to disk with progress (in-memory `StateFlow`);
+  evict deletes the file but keeps metadata. Migration 3→4.
 - **Phase 6** Multi-module split, broad test coverage, a11y, polish.

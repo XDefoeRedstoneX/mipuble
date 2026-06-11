@@ -17,6 +17,8 @@ data class BookEntity(
     @ColumnInfo(name = "last_chapter_index") val lastChapterIndex: Int = 0,
     @ColumnInfo(name = "category_id") val categoryId: Long? = null,
     @ColumnInfo(name = "custom_order") val customOrder: Long = 0,
+    @ColumnInfo(name = "remote_id") val remoteId: String? = null,
+    @ColumnInfo(name = "remote_size_bytes") val remoteSizeBytes: Long? = null,
 )
 
 fun BookEntity.toDomain() = Book(
@@ -30,4 +32,6 @@ fun BookEntity.toDomain() = Book(
     lastChapterIndex = lastChapterIndex,
     categoryId = categoryId,
     customOrder = customOrder,
+    remoteId = remoteId,
+    remoteSizeBytes = remoteSizeBytes,
 )

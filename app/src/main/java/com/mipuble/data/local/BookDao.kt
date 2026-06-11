@@ -27,6 +27,12 @@ interface BookDao {
     @Query("UPDATE books SET cover_path = :coverPath WHERE id = :id")
     suspend fun updateCover(id: Long, coverPath: String)
 
+    @Query("SELECT remote_id FROM books WHERE remote_id IS NOT NULL")
+    suspend fun remoteIds(): List<String>
+
+    @Query("UPDATE books SET file_path = :filePath WHERE id = :id")
+    suspend fun updateFilePath(id: Long, filePath: String?)
+
     @Query("UPDATE books SET category_id = :categoryId WHERE id = :id")
     suspend fun updateCategory(id: Long, categoryId: Long?)
 

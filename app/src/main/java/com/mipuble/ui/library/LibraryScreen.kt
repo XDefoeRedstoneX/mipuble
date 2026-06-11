@@ -9,6 +9,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -32,7 +33,10 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -72,6 +76,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.mipuble.domain.model.Book
 import com.mipuble.domain.model.Category
+import com.mipuble.domain.model.DownloadStatus
 import com.mipuble.domain.sort.BookSortOption
 import java.io.File
 import kotlin.math.absoluteValue
@@ -107,8 +112,13 @@ fun LibraryScreen(
         onSortSelected = viewModel::onSortSelected,
         onCategorySelected = viewModel::onCategorySelected,
         onImportClick = { picker.launch(arrayOf("application/epub+zip", "*/*")) },
+        onSync = viewModel::onSync,
         onBookClick = { book ->
-            if (book.isDownloaded) onOpenBook(book.id) else viewModel.onUnavailableBook()
+            when {
+                book.isDownloaded -> onOpenBook(book.id)
+                book.isRemote -> viewModel.onDownload(book.id)
+                else -> viewModel.onUnavailableBook()
+            }
         },
         onBookLongPress = { assigningBook = it },
         onManageCategories = { managingCategories = true },
@@ -121,6 +131,10 @@ fun LibraryScreen(
             categories = uiState.categories,
             onAssign = { categoryId ->
                 viewModel.onAssignCategory(book.id, categoryId)
+                assigningBook = null
+            },
+            onEvict = {
+                viewModel.onEvict(book.id)
                 assigningBook = null
             },
             onDismiss = { assigningBook = null },
@@ -145,6 +159,7 @@ fun LibraryContent(
     onSortSelected: (BookSortOption) -> Unit,
     onCategorySelected: (Long?) -> Unit,
     onImportClick: () -> Unit,
+    onSync: () -> Unit,
     onBookClick: (Book) -> Unit,
     onBookLongPress: (Book) -> Unit,
     onManageCategories: () -> Unit,
@@ -155,6 +170,16 @@ fun LibraryContent(
             TopAppBar(
                 title = { Text("Library") },
                 actions = {
+                    IconButton(onClick = onSync, enabled = !uiState.isSyncing) {
+                        if (uiState.isSyncing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(Icons.Default.Refresh, contentDescription = "Sync remote library")
+                        }
+                    }
                     SortMenu(selected = uiState.sortOption, onSortSelected = onSortSelected)
                 },
             )
@@ -251,6 +276,7 @@ private fun BookGrid(
             BookCard(
                 book = book,
                 category = uiState.categories.firstOrNull { it.id == book.categoryId },
+                downloadStatus = uiState.downloads[book.id],
                 modifier = Modifier
                     .reorderableItem(dragState, index)
                     .then(
@@ -320,6 +346,7 @@ private fun AssignCategoryDialog(
     book: Book,
     categories: List<Category>,
     onAssign: (Long?) -> Unit,
+    onEvict: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -345,6 +372,12 @@ private fun AssignCategoryDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("Close") }
+        },
+        // Reclaim space: drop the local file but keep this book's metadata.
+        dismissButton = if (book.canEvict) {
+            { TextButton(onClick = onEvict) { Text("Remove download") } }
+        } else {
+            null
         },
     )
 }
@@ -523,11 +556,12 @@ private val BookSortOption.label: String
 private fun BookCard(
     book: Book,
     category: Category?,
+    downloadStatus: DownloadStatus?,
     modifier: Modifier = Modifier,
 ) {
     Column(
-        // Books not yet on the device read as dimmed (foreshadows Phase 5).
-        modifier = modifier.alpha(if (book.isDownloaded) 1f else 0.55f),
+        // Not-yet-downloaded books read as dimmed until their bytes arrive.
+        modifier = modifier.alpha(if (book.isDownloaded) 1f else 0.6f),
     ) {
         Box(
             modifier = Modifier
@@ -567,6 +601,8 @@ private fun BookCard(
                         .border(1.dp, Color.White.copy(alpha = 0.8f), CircleShape),
                 )
             }
+
+            DownloadOverlay(book = book, status = downloadStatus)
         }
         if (book.progress > 0f) {
             LinearProgressIndicator(
@@ -590,6 +626,56 @@ private fun BookCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
+    }
+}
+
+/** Cloud/progress affordance over a cover: shows download state for remote books. */
+@Composable
+private fun BoxScope.DownloadOverlay(book: Book, status: DownloadStatus?) {
+    when (status) {
+        is DownloadStatus.Downloading -> {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .background(Color.Black.copy(alpha = 0.45f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(
+                        progress = { status.fraction },
+                        color = Color.White,
+                        modifier = Modifier.size(36.dp),
+                    )
+                    Text(
+                        "${(status.fraction * 100).toInt()}%",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+            }
+        }
+
+        else -> {
+            // A remote book not yet on the device gets a "tap to download" badge.
+            if (book.isRemote && !book.isDownloaded) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(6.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                        .padding(4.dp),
+                ) {
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Download",
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
+        }
     }
 }
 

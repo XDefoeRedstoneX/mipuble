@@ -69,8 +69,12 @@ dependencies {
 
     implementation(libs.androidx.datastore.preferences)
 
+    implementation(libs.okhttp)
+
     debugImplementation(libs.androidx.ui.tooling)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // Android provides org.json at runtime; pull the real impl in for JVM tests.
+    testImplementation(libs.json)
 }

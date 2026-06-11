@@ -4,14 +4,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mipuble.domain.model.Book
 import com.mipuble.domain.model.Category
+import com.mipuble.domain.model.DownloadStatus
 import com.mipuble.domain.sort.BookSortOption
 import com.mipuble.domain.usecase.AssignBookCategoryUseCase
 import com.mipuble.domain.usecase.CreateCategoryUseCase
 import com.mipuble.domain.usecase.DeleteCategoryUseCase
+import com.mipuble.domain.usecase.DownloadBookUseCase
+import com.mipuble.domain.usecase.EvictBookUseCase
 import com.mipuble.domain.usecase.ImportEpubUseCase
 import com.mipuble.domain.usecase.ObserveCategoriesUseCase
+import com.mipuble.domain.usecase.ObserveDownloadsUseCase
 import com.mipuble.domain.usecase.ObserveLibraryUseCase
 import com.mipuble.domain.usecase.SaveCustomOrderUseCase
+import com.mipuble.domain.usecase.SyncRemoteLibraryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,7 +25,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -31,6 +35,8 @@ data class LibraryUiState(
     val sortOption: BookSortOption = BookSortOption.TITLE_NATURAL,
     val categories: List<Category> = emptyList(),
     val selectedCategoryId: Long? = null,
+    val downloads: Map<Long, DownloadStatus> = emptyMap(),
+    val isSyncing: Boolean = false,
 ) {
     /**
      * Drag-and-drop only makes sense when looking at the full library in the
@@ -45,22 +51,27 @@ data class LibraryUiState(
 class LibraryViewModel @Inject constructor(
     observeLibrary: ObserveLibraryUseCase,
     observeCategories: ObserveCategoriesUseCase,
+    observeDownloads: ObserveDownloadsUseCase,
     private val importEpub: ImportEpubUseCase,
     private val createCategory: CreateCategoryUseCase,
     private val deleteCategory: DeleteCategoryUseCase,
     private val assignBookCategory: AssignBookCategoryUseCase,
     private val saveCustomOrder: SaveCustomOrderUseCase,
+    private val syncRemoteLibrary: SyncRemoteLibraryUseCase,
+    private val downloadBook: DownloadBookUseCase,
+    private val evictBook: EvictBookUseCase,
 ) : ViewModel() {
 
     private val sortOption = MutableStateFlow(BookSortOption.TITLE_NATURAL)
     private val selectedCategoryId = MutableStateFlow<Long?>(null)
+    private val isSyncing = MutableStateFlow(false)
 
-    /** One-off user-facing messages (import results, unavailable books). */
+    /** One-off user-facing messages (import/sync results, unavailable books). */
     private val _messages = MutableStateFlow<String?>(null)
     val messages: StateFlow<String?> = _messages
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val uiState: StateFlow<LibraryUiState> =
+    private val libraryAndCategories =
         combine(sortOption, selectedCategoryId) { sort, category -> sort to category }
             // flatMapLatest: changing sort/filter cancels the previous stream
             // and re-subscribes — no stale emissions.
@@ -68,21 +79,30 @@ class LibraryViewModel @Inject constructor(
                 combine(
                     observeLibrary(sort, category),
                     observeCategories(),
-                ) { books, categories ->
-                    LibraryUiState(
-                        isLoading = false,
-                        books = books,
-                        sortOption = sort,
-                        categories = categories,
-                        selectedCategoryId = category,
-                    )
-                }
+                ) { books, categories -> Triple(sort, category, books to categories) }
             }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5_000),
-                initialValue = LibraryUiState(),
+
+    val uiState: StateFlow<LibraryUiState> =
+        combine(
+            libraryAndCategories,
+            observeDownloads(),
+            isSyncing,
+        ) { (sort, category, data), downloads, syncing ->
+            val (books, categories) = data
+            LibraryUiState(
+                isLoading = false,
+                books = books,
+                sortOption = sort,
+                categories = categories,
+                selectedCategoryId = category,
+                downloads = downloads,
+                isSyncing = syncing,
             )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = LibraryUiState(),
+        )
 
     fun onSortSelected(option: BookSortOption) {
         sortOption.value = option
@@ -121,6 +141,35 @@ class LibraryViewModel @Inject constructor(
     /** Persists the arrangement produced by a completed drag session. */
     fun onReorder(orderedBookIds: List<Long>) {
         viewModelScope.launch { saveCustomOrder(orderedBookIds) }
+    }
+
+    fun onSync() {
+        if (isSyncing.value) return
+        viewModelScope.launch {
+            isSyncing.value = true
+            syncRemoteLibrary()
+                .onSuccess { added ->
+                    _messages.update {
+                        if (added > 0) "Synced — $added new book(s) available." else "Library is up to date."
+                    }
+                }
+                .onFailure { e -> _messages.update { e.message ?: "Sync failed." } }
+            isSyncing.value = false
+        }
+    }
+
+    fun onDownload(bookId: Long) {
+        viewModelScope.launch {
+            downloadBook(bookId).onFailure { _messages.update { "Download failed." } }
+        }
+    }
+
+    fun onEvict(bookId: Long) {
+        viewModelScope.launch {
+            evictBook(bookId)
+                .onSuccess { _messages.update { "Download removed — metadata kept." } }
+                .onFailure { _messages.update { "Couldn't remove the download." } }
+        }
     }
 
     fun onUnavailableBook() {

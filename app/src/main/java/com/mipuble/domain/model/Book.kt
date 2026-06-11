@@ -21,7 +21,17 @@ data class Book(
     val categoryId: Long? = null,
     /** Position in the user's hand-arranged order; ties broken by id. */
     val customOrder: Long = 0,
+    /** Identifier in the remote library (e.g. a Drive file id); null if local-only. */
+    val remoteId: String? = null,
+    /** Size of the remote file in bytes, for display before downloading. */
+    val remoteSizeBytes: Long? = null,
 ) {
-    /** Whether the book can actually be opened in the reader. */
+    /** Whether the book's bytes are on the device and it can be opened. */
     val isDownloaded: Boolean get() = filePath != null
+
+    /** Whether the book exists in the remote library. */
+    val isRemote: Boolean get() = remoteId != null
+
+    /** A downloaded remote book can be evicted to reclaim space (metadata stays). */
+    val canEvict: Boolean get() = filePath != null && remoteId != null
 }
