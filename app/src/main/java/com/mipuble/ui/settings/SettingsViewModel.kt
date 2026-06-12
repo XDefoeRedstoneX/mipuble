@@ -2,6 +2,8 @@ package com.mipuble.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mipuble.domain.model.PageTurnMode
+import com.mipuble.domain.model.ReaderFont
 import com.mipuble.domain.model.ReaderPreferences
 import com.mipuble.domain.model.ReaderSettingsBounds
 import com.mipuble.domain.model.ReaderTheme
@@ -72,6 +74,14 @@ class SettingsViewModel @Inject constructor(
 
     fun onThemeSelected(theme: ReaderTheme) {
         viewModelScope.launch { preferencesRepository.setTheme(theme) }
+    }
+
+    fun onFontSelected(font: ReaderFont) {
+        viewModelScope.launch { preferencesRepository.setFont(font) }
+    }
+
+    fun onPageTurnModeSelected(mode: PageTurnMode) {
+        viewModelScope.launch { preferencesRepository.setPageTurnMode(mode) }
     }
 
     fun onStepFont(direction: Int) {

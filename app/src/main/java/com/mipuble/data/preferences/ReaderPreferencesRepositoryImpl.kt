@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.mipuble.domain.model.PageTurnMode
+import com.mipuble.domain.model.ReaderFont
 import com.mipuble.domain.model.ReaderPreferences
 import com.mipuble.domain.model.ReaderSettingsBounds
 import com.mipuble.domain.model.ReaderTheme
@@ -29,6 +31,12 @@ class ReaderPreferencesRepositoryImpl @Inject constructor(
             lineSpacingPercent = prefs[Keys.LINE_SPACING] ?: 150,
             brightnessPercent = prefs[Keys.BRIGHTNESS] ?: 50,
             followSystemBrightness = prefs[Keys.FOLLOW_SYSTEM] ?: true,
+            font = prefs[Keys.FONT]
+                ?.let { runCatching { ReaderFont.valueOf(it) }.getOrNull() }
+                ?: ReaderFont.BOOK,
+            pageTurnMode = prefs[Keys.PAGE_TURN]
+                ?.let { runCatching { PageTurnMode.valueOf(it) }.getOrNull() }
+                ?: PageTurnMode.SCROLL,
         )
     }
 
@@ -56,11 +64,21 @@ class ReaderPreferencesRepositoryImpl @Inject constructor(
         dataStore.edit { it[Keys.FOLLOW_SYSTEM] = enabled }
     }
 
+    override suspend fun setFont(font: ReaderFont) {
+        dataStore.edit { it[Keys.FONT] = font.name }
+    }
+
+    override suspend fun setPageTurnMode(mode: PageTurnMode) {
+        dataStore.edit { it[Keys.PAGE_TURN] = mode.name }
+    }
+
     private object Keys {
         val THEME = stringPreferencesKey("reader_theme")
         val FONT_SCALE = intPreferencesKey("reader_font_scale")
         val LINE_SPACING = intPreferencesKey("reader_line_spacing")
         val BRIGHTNESS = intPreferencesKey("reader_brightness")
         val FOLLOW_SYSTEM = booleanPreferencesKey("reader_follow_system_brightness")
+        val FONT = stringPreferencesKey("reader_font")
+        val PAGE_TURN = stringPreferencesKey("reader_page_turn")
     }
 }

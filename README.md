@@ -120,6 +120,15 @@ troubleshooting — is in **[docs/GOOGLE_DRIVE_SETUP.md](docs/GOOGLE_DRIVE_SETUP
 ./gradlew lintDebug                  # Android lint
 ```
 
+## Bundled fonts
+
+The reader ships three optional typefaces, all licensed under the
+[SIL Open Font License 1.1](https://openfontlicense.org):
+[Literata](https://github.com/googlefonts/literata) (© The Literata Project),
+[Inter](https://github.com/rsms/inter) (© Rasmus Andersson), and
+[Atkinson Hyperlegible](https://www.brailleinstitute.org/freefont/)
+(© Braille Institute of America).
+
 ## Project status
 
 - [x] **Phase 0** — Foundation & tooling (buildable skeleton, CI)

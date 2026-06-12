@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -43,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mipuble.domain.model.PageTurnMode
 import com.mipuble.domain.model.ReaderPreferences
 import java.io.ByteArrayInputStream
 
@@ -171,33 +173,53 @@ private fun ReaderContent(
                     chapterUrl = state.chapterUrl,
                     preferences = state.preferences,
                     readResource = readResource,
-                    onToggleControls = { onEvent(ReaderEvent.ToggleControls) },
+                    onEvent = onEvent,
                 )
             }
         }
     }
 }
 
+/** WebView subclass solely to expose the protected horizontal scroll range. */
+private class PagingWebView(context: Context) : WebView(context) {
+    fun horizontalRange(): Int = computeHorizontalScrollRange()
+
+    fun maxScrollX(): Int = (horizontalRange() - width).coerceAtLeast(0)
+}
+
 /**
  * Hosts a WebView that streams chapters from the open EPUB and themes them by
  * injecting an override stylesheet into the served HTML bytes — no JavaScript
- * is enabled. Font scaling uses WebView.textZoom; theme/spacing changes reload
- * the current chapter so the fresh stylesheet is injected.
+ * is enabled. Font scaling uses WebView.textZoom; theme/font/spacing/page-mode
+ * changes reload the current chapter so the fresh stylesheet is injected.
+ *
+ * Page-turn modes:
+ * - SCROLL: native vertical scrolling; taps toggle the chrome.
+ * - PAGED: the chapter is laid out in screen-width CSS columns; this layer
+ *   consumes all touches and turns horizontal flings into one-screen jumps
+ *   via scrollTo. Swiping past the first/last column crosses chapters
+ *   (landing on the *last* page when going backwards).
  */
 @Composable
 private fun ChapterWebView(
     chapterUrl: String,
     preferences: ReaderPreferences,
     readResource: (String) -> ByteArray?,
-    onToggleControls: () -> Unit,
+    onEvent: (ReaderEvent) -> Unit,
 ) {
+    val appContext = LocalContext.current.applicationContext
     val backgroundArgb = ReaderThemeColors.of(preferences.theme).background.toArgb()
     // Read latest values inside the long-lived WebViewClient/listener closures.
     val css = rememberUpdatedState(readerOverrideCss(preferences))
-    val toggle = rememberUpdatedState(onToggleControls)
+    val events = rememberUpdatedState(onEvent)
+    val isPaged = rememberUpdatedState(preferences.pageTurnMode == PageTurnMode.PAGED)
+    // Set when the user swipes back across a chapter boundary: the previous
+    // chapter should open on its last page, not its first.
+    val jumpToLastPage = remember { mutableStateOf(false) }
 
     // A change to these requires re-injecting CSS, i.e. reloading the chapter.
-    val cssSignature = "${preferences.theme}:${preferences.lineSpacingPercent}"
+    val cssSignature =
+        "${preferences.theme}:${preferences.lineSpacingPercent}:${preferences.font}:${preferences.pageTurnMode}"
 
     val client = remember(readResource) {
         object : WebViewClient() {
@@ -208,8 +230,21 @@ private fun ChapterWebView(
                 val url = request.url
                 if (url.host != EpubWebViewBridge.HOST) return null
                 val path = url.path ?: return null
-                if (!path.startsWith(EpubWebViewBridge.PATH_PREFIX)) return null
 
+                // Bundled reader typefaces, served from app assets.
+                if (path.startsWith(EpubWebViewBridge.FONT_PATH_PREFIX)) {
+                    val name = path.removePrefix(EpubWebViewBridge.FONT_PATH_PREFIX)
+                    val bytes = runCatching {
+                        appContext.assets.open("fonts/$name").use { it.readBytes() }
+                    }.getOrNull() ?: return null
+                    return WebResourceResponse(
+                        EpubWebViewBridge.mimeTypeFor(name),
+                        null,
+                        ByteArrayInputStream(bytes),
+                    )
+                }
+
+                if (!path.startsWith(EpubWebViewBridge.PATH_PREFIX)) return null
                 val entry = path.removePrefix(EpubWebViewBridge.PATH_PREFIX)
                 val bytes = readResource(entry) ?: return null
                 val mime = EpubWebViewBridge.mimeTypeFor(entry)
@@ -220,28 +255,84 @@ private fun ChapterWebView(
                 }
                 return WebResourceResponse(mime, "UTF-8", ByteArrayInputStream(bytes))
             }
+
+            override fun onPageFinished(view: WebView, url: String?) {
+                // Entering a chapter backwards: land on its last page. The
+                // visual-state callback fires once the columns are laid out.
+                if (jumpToLastPage.value && isPaged.value) {
+                    jumpToLastPage.value = false
+                    val paging = view as? PagingWebView ?: return
+                    paging.postVisualStateCallback(
+                        0,
+                        object : WebView.VisualStateCallback() {
+                            override fun onComplete(requestId: Long) {
+                                paging.scrollTo(paging.maxScrollX(), 0)
+                            }
+                        },
+                    )
+                }
+            }
         }
     }
 
     AndroidView(
         factory = { context ->
-            WebView(context).apply {
+            PagingWebView(context).apply {
                 webViewClient = client
                 settings.javaScriptEnabled = false
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
 
+                val webView = this
+
+                fun turnPage(forward: Boolean) {
+                    val width = webView.width
+                    if (width <= 0) return
+                    val max = webView.maxScrollX()
+                    when {
+                        forward && webView.scrollX >= max ->
+                            events.value(ReaderEvent.NextChapter)
+
+                        !forward && webView.scrollX <= 0 -> {
+                            jumpToLastPage.value = true
+                            events.value(ReaderEvent.PreviousChapter)
+                        }
+
+                        else -> {
+                            val target = webView.scrollX + if (forward) width else -width
+                            webView.scrollTo(target.coerceIn(0, max), 0)
+                        }
+                    }
+                }
+
                 val gestureDetector = GestureDetector(
                     context,
                     object : GestureDetector.SimpleOnGestureListener() {
                         override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                            toggle.value.invoke()
+                            events.value(ReaderEvent.ToggleControls)
+                            return true
+                        }
+
+                        override fun onFling(
+                            e1: MotionEvent?,
+                            e2: MotionEvent,
+                            velocityX: Float,
+                            velocityY: Float,
+                        ): Boolean {
+                            if (!isPaged.value) return false
+                            if (kotlin.math.abs(velocityX) <= kotlin.math.abs(velocityY)) return false
+                            // Finger moving left (negative velocity) = next page.
+                            turnPage(forward = velocityX < 0)
                             return true
                         }
                     },
                 )
-                // Returning false lets the WebView keep handling scroll gestures.
-                setOnTouchListener { _, event -> gestureDetector.onTouchEvent(event); false }
+                // SCROLL: return false so the WebView keeps native scrolling.
+                // PAGED: consume everything; pages only move via turnPage().
+                setOnTouchListener { _, event ->
+                    gestureDetector.onTouchEvent(event)
+                    isPaged.value
+                }
             }
         },
         update = { webView ->

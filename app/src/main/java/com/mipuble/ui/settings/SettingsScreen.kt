@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mipuble.BuildConfig
+import com.mipuble.ui.reader.FontPickerRow
+import com.mipuble.ui.reader.PageTurnModeRow
 import com.mipuble.ui.reader.StepperRow
 import com.mipuble.ui.reader.ThemeRow
 
@@ -91,6 +93,14 @@ fun SettingsScreen(
             ThemeRow(
                 selected = uiState.preferences.theme,
                 onSelect = viewModel::onThemeSelected,
+            )
+            FontPickerRow(
+                selected = uiState.preferences.font,
+                onSelect = viewModel::onFontSelected,
+            )
+            PageTurnModeRow(
+                selected = uiState.preferences.pageTurnMode,
+                onSelect = viewModel::onPageTurnModeSelected,
             )
             StepperRow(
                 label = "Text size",

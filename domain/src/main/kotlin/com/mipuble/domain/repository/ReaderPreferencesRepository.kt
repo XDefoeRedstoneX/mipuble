@@ -1,5 +1,7 @@
 package com.mipuble.domain.repository
 
+import com.mipuble.domain.model.PageTurnMode
+import com.mipuble.domain.model.ReaderFont
 import com.mipuble.domain.model.ReaderPreferences
 import com.mipuble.domain.model.ReaderTheme
 import kotlinx.coroutines.flow.Flow
@@ -13,4 +15,6 @@ interface ReaderPreferencesRepository {
     suspend fun setLineSpacingPercent(value: Int)
     suspend fun setBrightnessPercent(value: Int)
     suspend fun setFollowSystemBrightness(enabled: Boolean)
+    suspend fun setFont(font: ReaderFont)
+    suspend fun setPageTurnMode(mode: PageTurnMode)
 }
