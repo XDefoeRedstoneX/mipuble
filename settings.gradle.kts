@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "mipuble"
 include(":app")
+include(":domain")

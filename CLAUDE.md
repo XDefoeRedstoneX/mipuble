@@ -10,15 +10,15 @@ first-class goals (not just "does it run").
 
 ## Architecture
 
-Clean Architecture with three layers, currently in a single Gradle module
-(`:app`) organized by package. Extraction into multiple Gradle modules is
-planned for Phase 6.
+Clean Architecture with three layers across two Gradle modules:
 
 ```
-com.mipuble
-├── data         # Room, DataStore, Drive, repositories (implementations)
-├── domain       # Entities, repository interfaces, use-cases (pure Kotlin, no Android)
-└── ui           # Compose screens, ViewModels, theme  (presentation)
+:domain      # Pure Kotlin/JVM module — entities, repository interfaces,
+             # use-cases, sorting. No Android dependency; the module boundary
+             # enforces it. JSR-330 @Inject only (Hilt wiring stays in :app).
+:app
+├── data     # Room, DataStore, Drive/fake remote sources, repository impls
+└── ui       # Compose screens, ViewModels, theme  (presentation)
 ```
 
 Rules of thumb:
@@ -42,9 +42,9 @@ deliberate contrast piece.
 ## Build & test
 
 ```bash
-./gradlew assembleDebug      # build
-./gradlew testDebugUnitTest  # unit tests
-./gradlew lintDebug          # lint
+./gradlew assembleDebug                     # build
+./gradlew testDebugUnitTest :domain:test    # unit tests (app + domain)
+./gradlew lintDebug                         # lint
 ```
 
 CI (`.github/workflows/ci.yml`) runs lint + unit tests + assembleDebug on every push.
@@ -78,4 +78,7 @@ CI (`.github/workflows/ci.yml`) runs lint + unit tests + assembleDebug on every 
   offline. Sync inserts metadata-only books (filePath=null, remoteId set);
   download streams bytes to disk with progress (in-memory `StateFlow`);
   evict deletes the file but keeps metadata. Migration 3→4.
-- **Phase 6** Multi-module split, broad test coverage, a11y, polish.
+- **Phase 6** ✅ Multi-module split, test coverage, a11y, polish.
+  `domain` extracted to a pure-JVM `:domain` Gradle module (boundary now
+  enforced, not conventional). LibraryViewModel covered by JVM tests via a
+  `MainDispatcherRule`; README gained a from-zero install guide.

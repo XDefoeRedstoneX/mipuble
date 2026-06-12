@@ -574,7 +574,7 @@ private fun BookCard(
             if (book.coverPath != null) {
                 AsyncImage(
                     model = File(book.coverPath),
-                    contentDescription = null,
+                    contentDescription = "Cover of ${book.title}",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )

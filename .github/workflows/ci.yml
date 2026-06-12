@@ -34,7 +34,7 @@ jobs:
         run: ./gradlew lintDebug --stacktrace
 
       - name: Unit tests
-        run: ./gradlew testDebugUnitTest --stacktrace
+        run: ./gradlew testDebugUnitTest :domain:test --stacktrace
 
       - name: Assemble debug APK
         run: ./gradlew assembleDebug --stacktrace
