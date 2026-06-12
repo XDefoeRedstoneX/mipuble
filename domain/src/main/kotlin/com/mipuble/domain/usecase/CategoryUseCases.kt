@@ -22,6 +22,16 @@ class CreateCategoryUseCase @Inject constructor(
     }
 }
 
+class UpdateCategoryUseCase @Inject constructor(
+    private val repository: CategoryRepository,
+) {
+    suspend operator fun invoke(id: Long, name: String, colorArgb: Int): Result<Unit> {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return Result.failure(IllegalArgumentException("Name can't be empty"))
+        return runCatching { repository.updateCategory(id, trimmed, colorArgb) }
+    }
+}
+
 class DeleteCategoryUseCase @Inject constructor(
     private val repository: CategoryRepository,
 ) {

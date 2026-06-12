@@ -17,6 +17,7 @@ import com.mipuble.domain.usecase.ObserveDownloadsUseCase
 import com.mipuble.domain.usecase.ObserveLibraryUseCase
 import com.mipuble.domain.usecase.SaveCustomOrderUseCase
 import com.mipuble.domain.usecase.SyncRemoteLibraryUseCase
+import com.mipuble.domain.usecase.UpdateCategoryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -54,6 +55,7 @@ class LibraryViewModel @Inject constructor(
     observeDownloads: ObserveDownloadsUseCase,
     private val importEpub: ImportEpubUseCase,
     private val createCategory: CreateCategoryUseCase,
+    private val updateCategory: UpdateCategoryUseCase,
     private val deleteCategory: DeleteCategoryUseCase,
     private val assignBookCategory: AssignBookCategoryUseCase,
     private val saveCustomOrder: SaveCustomOrderUseCase,
@@ -124,6 +126,13 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch {
             createCategory(name, colorArgb)
                 .onFailure { e -> _messages.update { e.message ?: "Couldn't create category." } }
+        }
+    }
+
+    fun onUpdateCategory(categoryId: Long, name: String, colorArgb: Int) {
+        viewModelScope.launch {
+            updateCategory(categoryId, name, colorArgb)
+                .onFailure { e -> _messages.update { e.message ?: "Couldn't update category." } }
         }
     }
 

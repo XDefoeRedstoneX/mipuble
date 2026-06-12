@@ -12,6 +12,10 @@ object EpubWebViewBridge {
     const val PATH_PREFIX = "/epub/"
     const val BASE = "https://$HOST$PATH_PREFIX"
 
+    /** Bundled reader typefaces are served from here (assets/fonts/...). */
+    const val FONT_PATH_PREFIX = "/mipuble-fonts/"
+    const val FONT_BASE = "https://$HOST$FONT_PATH_PREFIX"
+
     fun mimeTypeFor(path: String): String = when (path.substringAfterLast('.').lowercase()) {
         "xhtml", "html", "htm" -> "text/html"
         "css" -> "text/css"

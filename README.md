@@ -90,15 +90,9 @@ will ask you to allow installs from that source.
 
 The cloud library ships against an offline fake so everything works with zero
 setup. The real Drive client (`DriveRemoteLibrarySource`, REST v3) is included
-but inert. To activate it you need OAuth credentials of your own:
-
-1. Create a project at <https://console.cloud.google.com>, enable the
-   **Google Drive API**, and create an **OAuth client ID** for Android (your
-   package name + signing-key SHA-1).
-2. Implement `DriveAuthProvider` to return an access token with
-   `drive.readonly` scope (Credential Manager / Google Sign-In).
-3. In `RemoteModule`, swap the `@Binds` from `FakeRemoteLibrarySource` to
-   `DriveRemoteLibrarySource`.
+but inert until you create OAuth credentials of your own. The complete
+beginner-friendly walkthrough — Google Cloud Console, SHA-1, code wiring,
+troubleshooting — is in **[docs/GOOGLE_DRIVE_SETUP.md](docs/GOOGLE_DRIVE_SETUP.md)**.
 
 ---
 
@@ -125,6 +119,15 @@ but inert. To activate it you need OAuth credentials of your own:
 ./gradlew testDebugUnitTest :domain:test   # run all unit tests
 ./gradlew lintDebug                  # Android lint
 ```
+
+## Bundled fonts
+
+The reader ships three optional typefaces, all licensed under the
+[SIL Open Font License 1.1](https://openfontlicense.org):
+[Literata](https://github.com/googlefonts/literata) (© The Literata Project),
+[Inter](https://github.com/rsms/inter) (© Rasmus Andersson), and
+[Atkinson Hyperlegible](https://www.brailleinstitute.org/freefont/)
+(© Braille Institute of America).
 
 ## Project status
 

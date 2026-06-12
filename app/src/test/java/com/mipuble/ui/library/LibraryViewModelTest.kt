@@ -19,6 +19,7 @@ import com.mipuble.domain.usecase.ObserveDownloadsUseCase
 import com.mipuble.domain.usecase.ObserveLibraryUseCase
 import com.mipuble.domain.usecase.SaveCustomOrderUseCase
 import com.mipuble.domain.usecase.SyncRemoteLibraryUseCase
+import com.mipuble.domain.usecase.UpdateCategoryUseCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -63,6 +64,7 @@ class LibraryViewModelTest {
     private class FakeCategoryRepository : CategoryRepository {
         override fun observeCategories(): Flow<List<Category>> = MutableStateFlow(emptyList())
         override suspend fun createCategory(name: String, colorArgb: Int): Long = 1L
+        override suspend fun updateCategory(id: Long, name: String, colorArgb: Int) = Unit
         override suspend fun deleteCategory(id: Long) = Unit
     }
 
@@ -93,6 +95,7 @@ class LibraryViewModelTest {
             observeDownloads = ObserveDownloadsUseCase(remoteRepository),
             importEpub = ImportEpubUseCase(bookRepository),
             createCategory = CreateCategoryUseCase(categoryRepository),
+            updateCategory = UpdateCategoryUseCase(categoryRepository),
             deleteCategory = DeleteCategoryUseCase(categoryRepository),
             assignBookCategory = AssignBookCategoryUseCase(bookRepository),
             saveCustomOrder = SaveCustomOrderUseCase(bookRepository),

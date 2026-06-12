@@ -11,6 +11,12 @@ class ObserveDownloadsUseCase @Inject constructor(
     operator fun invoke(): Flow<Map<Long, DownloadStatus>> = repository.downloads
 }
 
+class CheckRemoteAvailabilityUseCase @Inject constructor(
+    private val repository: RemoteLibraryRepository,
+) {
+    suspend operator fun invoke(): Boolean = repository.isAvailable()
+}
+
 class SyncRemoteLibraryUseCase @Inject constructor(
     private val repository: RemoteLibraryRepository,
 ) {

@@ -2,11 +2,11 @@ package com.mipuble.ui.library
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -17,35 +17,43 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -55,11 +63,13 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
@@ -80,15 +90,19 @@ import com.mipuble.domain.model.DownloadStatus
 import com.mipuble.domain.sort.BookSortOption
 import java.io.File
 import kotlin.math.absoluteValue
+import kotlinx.coroutines.launch
 
 @Composable
 fun LibraryScreen(
     onOpenBook: (Long) -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: LibraryViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val message by viewModel.messages.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(message) {
         message?.let {
@@ -104,26 +118,46 @@ fun LibraryScreen(
     ) { uri -> uri?.let { viewModel.onImport(it.toString()) } }
 
     var assigningBook by remember { mutableStateOf<Book?>(null) }
-    var managingCategories by remember { mutableStateOf(false) }
+    var editingCategory by remember { mutableStateOf<Category?>(null) }
+    var creatingCategory by remember { mutableStateOf(false) }
 
-    LibraryContent(
-        uiState = uiState,
-        snackbarHostState = snackbarHostState,
-        onSortSelected = viewModel::onSortSelected,
-        onCategorySelected = viewModel::onCategorySelected,
-        onImportClick = { picker.launch(arrayOf("application/epub+zip", "*/*")) },
-        onSync = viewModel::onSync,
-        onBookClick = { book ->
-            when {
-                book.isDownloaded -> onOpenBook(book.id)
-                book.isRemote -> viewModel.onDownload(book.id)
-                else -> viewModel.onUnavailableBook()
-            }
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            CategoryDrawer(
+                categories = uiState.categories,
+                selectedId = uiState.selectedCategoryId,
+                onSelect = { id ->
+                    viewModel.onCategorySelected(id)
+                    scope.launch { drawerState.close() }
+                },
+                onEdit = { editingCategory = it },
+                onCreate = { creatingCategory = true },
+                onOpenSettings = {
+                    scope.launch { drawerState.close() }
+                    onOpenSettings()
+                },
+            )
         },
-        onBookLongPress = { assigningBook = it },
-        onManageCategories = { managingCategories = true },
-        onReorder = viewModel::onReorder,
-    )
+    ) {
+        LibraryContent(
+            uiState = uiState,
+            snackbarHostState = snackbarHostState,
+            onOpenDrawer = { scope.launch { drawerState.open() } },
+            onSortSelected = viewModel::onSortSelected,
+            onImportClick = { picker.launch(arrayOf("application/epub+zip", "*/*")) },
+            onSync = viewModel::onSync,
+            onBookClick = { book ->
+                when {
+                    book.isDownloaded -> onOpenBook(book.id)
+                    book.isRemote -> viewModel.onDownload(book.id)
+                    else -> viewModel.onUnavailableBook()
+                }
+            },
+            onBookLongPress = { assigningBook = it },
+            onReorder = viewModel::onReorder,
+        )
+    }
 
     assigningBook?.let { book ->
         AssignCategoryDialog(
@@ -141,13 +175,136 @@ fun LibraryScreen(
         )
     }
 
-    if (managingCategories) {
-        ManageCategoriesDialog(
-            categories = uiState.categories,
-            onCreate = viewModel::onCreateCategory,
-            onDelete = viewModel::onDeleteCategory,
-            onDismiss = { managingCategories = false },
+    if (creatingCategory) {
+        CategoryEditorDialog(
+            title = "New category",
+            confirmLabel = "Create",
+            onConfirm = { name, color ->
+                viewModel.onCreateCategory(name, color)
+                creatingCategory = false
+            },
+            onDismiss = { creatingCategory = false },
         )
+    }
+
+    editingCategory?.let { category ->
+        CategoryEditorDialog(
+            title = "Edit category",
+            confirmLabel = "Save",
+            initialName = category.name,
+            initialColorArgb = category.colorArgb,
+            onConfirm = { name, color ->
+                viewModel.onUpdateCategory(category.id, name, color)
+                editingCategory = null
+            },
+            onDelete = {
+                viewModel.onDeleteCategory(category.id)
+                editingCategory = null
+            },
+            onDismiss = { editingCategory = null },
+        )
+    }
+}
+
+/** The tag/bookmark silhouette used for category rows — points right. */
+private val TagShape = GenericShape { size, _ ->
+    val notch = size.width * 0.3f
+    moveTo(0f, 0f)
+    lineTo(size.width - notch, 0f)
+    lineTo(size.width, size.height / 2f)
+    lineTo(size.width - notch, size.height)
+    lineTo(0f, size.height)
+    close()
+}
+
+@Composable
+private fun CategoryTag(color: Color, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .width(26.dp)
+            .height(16.dp)
+            .clip(TagShape)
+            .background(color),
+    )
+}
+
+/**
+ * The navigation drawer: every category is a colored bookmark row (the active
+ * one highlighted), with create/settings actions pinned below the list.
+ */
+@Composable
+private fun CategoryDrawer(
+    categories: List<Category>,
+    selectedId: Long?,
+    onSelect: (Long?) -> Unit,
+    onEdit: (Category) -> Unit,
+    onCreate: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    ModalDrawerSheet {
+        Text(
+            text = "mipuble",
+            style = MaterialTheme.typography.titleLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(horizontal = 28.dp, vertical = 20.dp),
+        )
+        HorizontalDivider()
+
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            contentPadding = PaddingValues(vertical = 8.dp),
+        ) {
+            item {
+                NavigationDrawerItem(
+                    label = { Text("All books") },
+                    icon = {
+                        CategoryTag(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        )
+                    },
+                    selected = selectedId == null,
+                    onClick = { onSelect(null) },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+            }
+            items(categories, key = { it.id }) { category ->
+                NavigationDrawerItem(
+                    label = {
+                        Text(category.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    },
+                    icon = { CategoryTag(color = Color(category.colorArgb)) },
+                    badge = {
+                        IconButton(onClick = { onEdit(category) }) {
+                            Icon(
+                                Icons.Default.Edit,
+                                contentDescription = "Edit ${category.name}",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    },
+                    selected = selectedId == category.id,
+                    onClick = { onSelect(category.id) },
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+            }
+        }
+
+        HorizontalDivider()
+        NavigationDrawerItem(
+            label = { Text("Create category") },
+            icon = { Icon(Icons.Default.Add, contentDescription = null) },
+            selected = false,
+            onClick = onCreate,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        NavigationDrawerItem(
+            label = { Text("Settings") },
+            icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+            selected = false,
+            onClick = onOpenSettings,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+        )
+        Spacer(Modifier.height(12.dp))
     }
 }
 
@@ -156,19 +313,26 @@ fun LibraryScreen(
 fun LibraryContent(
     uiState: LibraryUiState,
     snackbarHostState: SnackbarHostState,
+    onOpenDrawer: () -> Unit,
     onSortSelected: (BookSortOption) -> Unit,
-    onCategorySelected: (Long?) -> Unit,
     onImportClick: () -> Unit,
     onSync: () -> Unit,
     onBookClick: (Book) -> Unit,
     onBookLongPress: (Book) -> Unit,
-    onManageCategories: () -> Unit,
     onReorder: (List<Long>) -> Unit,
 ) {
+    val title = uiState.categories
+        .firstOrNull { it.id == uiState.selectedCategoryId }?.name ?: "Library"
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Library") },
+                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                navigationIcon = {
+                    IconButton(onClick = onOpenDrawer) {
+                        Icon(Icons.Default.Menu, contentDescription = "Open categories")
+                    }
+                },
                 actions = {
                     IconButton(onClick = onSync, enabled = !uiState.isSyncing) {
                         if (uiState.isSyncing) {
@@ -191,18 +355,11 @@ fun LibraryContent(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
         ) {
-            CategoryFilterRow(
-                categories = uiState.categories,
-                selectedId = uiState.selectedCategoryId,
-                onSelect = onCategorySelected,
-                onManage = onManageCategories,
-            )
-
             when {
                 uiState.isLoading -> Unit
 
@@ -296,52 +453,6 @@ private fun BookGrid(
 }
 
 @Composable
-private fun CategoryFilterRow(
-    categories: List<Category>,
-    selectedId: Long?,
-    onSelect: (Long?) -> Unit,
-    onManage: () -> Unit,
-) {
-    LazyRow(
-        contentPadding = PaddingValues(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        item {
-            FilterChip(
-                selected = selectedId == null,
-                onClick = { onSelect(null) },
-                label = { Text("All") },
-            )
-        }
-        items(categories, key = { it.id }) { category ->
-            FilterChip(
-                selected = selectedId == category.id,
-                onClick = { onSelect(category.id.takeIf { selectedId != category.id }) },
-                label = { Text(category.name) },
-                leadingIcon = { CategoryDot(category) },
-            )
-        }
-        item {
-            FilterChip(
-                selected = false,
-                onClick = onManage,
-                label = { Text("Edit") },
-            )
-        }
-    }
-}
-
-@Composable
-private fun CategoryDot(category: Category, size: androidx.compose.ui.unit.Dp = 12.dp) {
-    Box(
-        modifier = Modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(Color(category.colorArgb)),
-    )
-}
-
-@Composable
 private fun AssignCategoryDialog(
     book: Book,
     categories: List<Category>,
@@ -410,55 +521,47 @@ private fun CategoryChoiceRow(
     }
 }
 
-/** Palette offered for new categories; a hue slider covers everything else. */
+/** Palette offered for categories; a hue slider covers everything else. */
 private val categoryPalette = listOf(
     0xFF00897B, 0xFF7B1FA2, 0xFFC62828, 0xFFEF6C00,
     0xFF2E7D32, 0xFF1565C0, 0xFF6D4C41, 0xFF546E7A,
 ).map { Color(it) }
 
+/** Shared create/edit dialog: name field, palette, hue slider, optional delete. */
 @Composable
-private fun ManageCategoriesDialog(
-    categories: List<Category>,
-    onCreate: (name: String, colorArgb: Int) -> Unit,
-    onDelete: (Long) -> Unit,
+private fun CategoryEditorDialog(
+    title: String,
+    confirmLabel: String,
+    onConfirm: (name: String, colorArgb: Int) -> Unit,
     onDismiss: () -> Unit,
+    initialName: String = "",
+    initialColorArgb: Int? = null,
+    onDelete: (() -> Unit)? = null,
 ) {
-    var name by remember { mutableStateOf("") }
-    var selectedColor by remember { mutableStateOf(categoryPalette.first()) }
+    var name by remember { mutableStateOf(initialName) }
+    var selectedColor by remember {
+        mutableStateOf(initialColorArgb?.let { Color(it) } ?: categoryPalette.first())
+    }
     var hue by remember { mutableStateOf<Float?>(null) }
 
     val effectiveColor = hue?.let { Color.hsv(it, 0.6f, 0.7f) } ?: selectedColor
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Categories") },
+        title = { Text(title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                categories.forEach { category ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CategoryDot(category, size = 16.dp)
-                        Spacer(Modifier.width(10.dp))
-                        Text(
-                            category.name,
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                        IconButton(onClick = { onDelete(category.id) }) {
-                            Icon(
-                                Icons.Default.Clear,
-                                contentDescription = "Delete ${category.name}",
-                            )
-                        }
-                    }
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    CategoryTag(color = effectiveColor)
+                    Spacer(Modifier.width(10.dp))
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("Name") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
-
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("New category") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     categoryPalette.forEach { color ->
@@ -502,15 +605,19 @@ private fun ManageCategoriesDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = {
-                    onCreate(name, effectiveColor.toArgb())
-                    name = ""
-                },
+                onClick = { onConfirm(name, effectiveColor.toArgb()) },
                 enabled = name.isNotBlank(),
-            ) { Text("Add") }
+            ) { Text(confirmLabel) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Done") }
+            Row {
+                if (onDelete != null) {
+                    TextButton(onClick = onDelete) {
+                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
         },
     )
 }
@@ -591,14 +698,11 @@ private fun BookCard(
 
             // Category ribbon in the cover's top corner.
             if (category != null) {
-                Box(
+                CategoryTag(
+                    color = Color(category.colorArgb),
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .size(14.dp)
-                        .clip(CircleShape)
-                        .background(Color(category.colorArgb))
-                        .border(1.dp, Color.White.copy(alpha = 0.8f), CircleShape),
+                        .align(Alignment.TopStart)
+                        .padding(top = 8.dp),
                 )
             }
 

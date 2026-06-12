@@ -1,5 +1,7 @@
 package com.mipuble.ui.reader
 
+import com.mipuble.domain.model.PageTurnMode
+import com.mipuble.domain.model.ReaderFont
 import com.mipuble.domain.model.ReaderPreferences
 import com.mipuble.domain.model.ReaderTheme
 
@@ -37,6 +39,8 @@ sealed interface ReaderEvent {
     data object CloseSettings : ReaderEvent
 
     data class SetTheme(val theme: ReaderTheme) : ReaderEvent
+    data class SetFont(val font: ReaderFont) : ReaderEvent
+    data class SetPageTurnMode(val mode: PageTurnMode) : ReaderEvent
     data object IncreaseFont : ReaderEvent
     data object DecreaseFont : ReaderEvent
     data object IncreaseLineSpacing : ReaderEvent

@@ -114,6 +114,8 @@ class ReaderViewModel @Inject constructor(
             ReaderEvent.CloseSettings -> content.update { it.copy(showSettings = false) }
 
             is ReaderEvent.SetTheme -> updatePrefs { preferencesRepository.setTheme(event.theme) }
+            is ReaderEvent.SetFont -> updatePrefs { preferencesRepository.setFont(event.font) }
+            is ReaderEvent.SetPageTurnMode -> updatePrefs { preferencesRepository.setPageTurnMode(event.mode) }
             ReaderEvent.IncreaseFont -> stepFont(+1)
             ReaderEvent.DecreaseFont -> stepFont(-1)
             ReaderEvent.IncreaseLineSpacing -> stepLineSpacing(+1)

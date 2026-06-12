@@ -14,6 +14,9 @@ interface CategoryDao {
     @Insert
     suspend fun insert(category: CategoryEntity): Long
 
+    @Query("UPDATE categories SET name = :name, color_argb = :colorArgb WHERE id = :id")
+    suspend fun update(id: Long, name: String, colorArgb: Int)
+
     @Query("DELETE FROM categories WHERE id = :id")
     suspend fun deleteById(id: Long)
 
