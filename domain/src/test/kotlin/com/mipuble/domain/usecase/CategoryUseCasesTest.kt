@@ -13,6 +13,7 @@ class CategoryUseCasesTest {
 
     private class RecordingCategoryRepository : CategoryRepository {
         var created: Pair<String, Int>? = null
+        var updated: Triple<Long, String, Int>? = null
         var deletedId: Long? = null
 
         override fun observeCategories(): Flow<List<Category>> = flowOf(emptyList())
@@ -20,6 +21,10 @@ class CategoryUseCasesTest {
         override suspend fun createCategory(name: String, colorArgb: Int): Long {
             created = name to colorArgb
             return 1L
+        }
+
+        override suspend fun updateCategory(id: Long, name: String, colorArgb: Int) {
+            updated = Triple(id, name, colorArgb)
         }
 
         override suspend fun deleteCategory(id: Long) {
@@ -45,6 +50,26 @@ class CategoryUseCasesTest {
 
         assertTrue(result.isFailure)
         assertEquals(null, repository.created)
+    }
+
+    @Test
+    fun `update trims the name and passes the new color`() = runTest {
+        val repository = RecordingCategoryRepository()
+
+        val result = UpdateCategoryUseCase(repository)(5L, "  Renamed  ", 0xFF112233.toInt())
+
+        assertTrue(result.isSuccess)
+        assertEquals(Triple(5L, "Renamed", 0xFF112233.toInt()), repository.updated)
+    }
+
+    @Test
+    fun `update rejects blank names`() = runTest {
+        val repository = RecordingCategoryRepository()
+
+        val result = UpdateCategoryUseCase(repository)(5L, " ", 0)
+
+        assertTrue(result.isFailure)
+        assertEquals(null, repository.updated)
     }
 
     @Test

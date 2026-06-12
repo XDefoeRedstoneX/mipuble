@@ -74,7 +74,7 @@ fun ReaderSettingsSheet(
 }
 
 @Composable
-private fun ThemeRow(selected: ReaderTheme, onSelect: (ReaderTheme) -> Unit) {
+internal fun ThemeRow(selected: ReaderTheme, onSelect: (ReaderTheme) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
         ReaderTheme.entries.forEach { theme ->
             val colors = ReaderThemeColors.of(theme)
@@ -107,7 +107,7 @@ private fun ThemeRow(selected: ReaderTheme, onSelect: (ReaderTheme) -> Unit) {
 }
 
 @Composable
-private fun StepperRow(
+internal fun StepperRow(
     label: String,
     value: String,
     onDecrease: () -> Unit,
