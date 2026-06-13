@@ -15,6 +15,12 @@ interface BookDao {
     @Query("SELECT * FROM books WHERE id = :id")
     suspend fun getById(id: Long): BookEntity?
 
+    @Query("SELECT * FROM books")
+    suspend fun getAll(): List<BookEntity>
+
+    @Query("DELETE FROM books WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
     @Insert
     suspend fun insertAll(books: List<BookEntity>)
 
@@ -32,6 +38,9 @@ interface BookDao {
 
     @Query("UPDATE books SET file_path = :filePath WHERE id = :id")
     suspend fun updateFilePath(id: Long, filePath: String?)
+
+    @Query("UPDATE books SET remote_id = :remoteId, remote_size_bytes = :remoteSize WHERE id = :id")
+    suspend fun setRemote(id: Long, remoteId: String, remoteSize: Long)
 
     @Query("UPDATE books SET category_id = :categoryId WHERE id = :id")
     suspend fun updateCategory(id: Long, categoryId: Long?)

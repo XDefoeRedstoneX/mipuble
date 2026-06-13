@@ -14,10 +14,13 @@ class RemoteLibraryUseCasesTest {
     private class FakeRemoteRepository : RemoteLibraryRepository {
         val downloaded = mutableListOf<Long>()
         val evicted = mutableListOf<Long>()
+        var uploadedBatch: List<String>? = null
+        var resetUploadedFirst: Boolean? = null
         var syncResult: Result<Int> = Result.success(0)
 
         override val downloads: Flow<Map<Long, DownloadStatus>> =
             flowOf(mapOf(1L to DownloadStatus.Downloading(0.5f)))
+        override val uploads: Flow<com.mipuble.domain.model.UploadProgress?> = flowOf(null)
 
         override suspend fun isAvailable(): Boolean = true
         override suspend fun sync(): Result<Int> = syncResult
@@ -29,6 +32,16 @@ class RemoteLibraryUseCasesTest {
         override suspend fun evict(bookId: Long): Result<Unit> {
             evicted += bookId
             return Result.success(Unit)
+        }
+
+        override suspend fun uploadBooks(uriStrings: List<String>): Result<Int> {
+            uploadedBatch = uriStrings
+            return Result.success(uriStrings.size)
+        }
+
+        override suspend fun resetToDrive(uploadLocalFirst: Boolean): Result<Int> {
+            resetUploadedFirst = uploadLocalFirst
+            return Result.success(0)
         }
     }
 
@@ -57,6 +70,25 @@ class RemoteLibraryUseCasesTest {
         EvictBookUseCase(repository)(7L)
 
         assertEquals(listOf(7L), repository.evicted)
+    }
+
+    @Test
+    fun `upload passes the uri batch through and counts them`() = runTest {
+        val repository = FakeRemoteRepository()
+
+        val result = UploadBooksToDriveUseCase(repository)(listOf("a", "b"))
+
+        assertEquals(2, result.getOrNull())
+        assertEquals(listOf("a", "b"), repository.uploadedBatch)
+    }
+
+    @Test
+    fun `reset forwards the upload-first flag`() = runTest {
+        val repository = FakeRemoteRepository()
+
+        ResetLibraryToDriveUseCase(repository)(uploadLocalFirst = true)
+
+        assertEquals(true, repository.resetUploadedFirst)
     }
 
     @Test

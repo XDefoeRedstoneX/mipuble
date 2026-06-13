@@ -13,7 +13,7 @@ interface RemoteLibrarySource {
     /** Whether the source can be used right now (configured, signed in, reachable). */
     suspend fun isAvailable(): Boolean
 
-    /** Lists books with metadata only — no file bytes are transferred. */
+    /** Lists books in the library folder, metadata only — no file bytes transferred. */
     suspend fun listBooks(): List<RemoteBook>
 
     /** Cover image bytes for a remote book, if available. */
@@ -24,4 +24,14 @@ interface RemoteLibrarySource {
      * in 0f..1f. Throws on failure (the repository turns this into a Result).
      */
     suspend fun download(remoteId: String, target: File, onProgress: (Float) -> Unit)
+
+    /**
+     * Uploads [file] into the library folder under [displayName], reporting
+     * progress in 0f..1f, and returns its remote handle.
+     */
+    suspend fun uploadBook(
+        file: File,
+        displayName: String,
+        onProgress: (Float) -> Unit,
+    ): RemoteBook
 }

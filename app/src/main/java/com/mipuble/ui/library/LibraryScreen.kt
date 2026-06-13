@@ -81,6 +81,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -89,6 +90,7 @@ import coil.compose.AsyncImage
 import com.mipuble.domain.model.Book
 import com.mipuble.domain.model.Category
 import com.mipuble.domain.model.DownloadStatus
+import com.mipuble.domain.model.UploadProgress
 import com.mipuble.domain.sort.BookSortOption
 import java.io.File
 import kotlin.math.absoluteValue
@@ -118,6 +120,11 @@ fun LibraryScreen(
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let { viewModel.onImport(it.toString()) } }
+
+    // Multi-pick for uploading EPUBs straight into the Drive mipuble folder.
+    val uploadPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenMultipleDocuments(),
+    ) { uris -> viewModel.onUploadBooks(uris.map { it.toString() }) }
 
     val authLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
@@ -174,6 +181,7 @@ fun LibraryScreen(
             onSortSelected = viewModel::onSortSelected,
             onImportClick = { picker.launch(arrayOf("application/epub+zip", "*/*")) },
             onSync = viewModel::onSync,
+            onUploadClick = { uploadPicker.launch(arrayOf("application/epub+zip", "*/*")) },
             onBookClick = { book ->
                 when {
                     book.isDownloaded -> onOpenBook(book.id)
@@ -229,6 +237,29 @@ fun LibraryScreen(
                 editingCategory = null
             },
             onDismiss = { editingCategory = null },
+        )
+    }
+}
+
+/** A thin banner showing upload-batch progress at the top of the grid. */
+@Composable
+private fun UploadBanner(progress: UploadProgress) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+    ) {
+        Text(
+            "Uploading ${progress.currentIndex}/${progress.total}: ${progress.fileName}",
+            style = MaterialTheme.typography.labelMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Spacer(Modifier.height(4.dp))
+        LinearProgressIndicator(
+            progress = { progress.fraction },
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }
@@ -344,6 +375,7 @@ fun LibraryContent(
     onSortSelected: (BookSortOption) -> Unit,
     onImportClick: () -> Unit,
     onSync: () -> Unit,
+    onUploadClick: () -> Unit,
     onBookClick: (Book) -> Unit,
     onBookLongPress: (Book) -> Unit,
     onReorder: (List<Long>) -> Unit,
@@ -361,6 +393,12 @@ fun LibraryContent(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onUploadClick, enabled = uiState.upload == null) {
+                        Icon(
+                            painter = painterResource(com.mipuble.R.drawable.ic_cloud_upload),
+                            contentDescription = "Upload to Drive",
+                        )
+                    }
                     IconButton(onClick = onSync, enabled = !uiState.isSyncing) {
                         if (uiState.isSyncing) {
                             CircularProgressIndicator(
@@ -387,6 +425,7 @@ fun LibraryContent(
                 .fillMaxSize()
                 .padding(padding),
         ) {
+            uiState.upload?.let { UploadBanner(it) }
             when {
                 uiState.isLoading -> Unit
 

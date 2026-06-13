@@ -10,6 +10,7 @@ import com.mipuble.data.remote.NeedConsentException
 import com.mipuble.domain.model.Book
 import com.mipuble.domain.model.Category
 import com.mipuble.domain.model.DownloadStatus
+import com.mipuble.domain.model.UploadProgress
 import com.mipuble.domain.sort.BookSortOption
 import com.mipuble.domain.usecase.AssignBookCategoryUseCase
 import com.mipuble.domain.usecase.CreateCategoryUseCase
@@ -20,9 +21,11 @@ import com.mipuble.domain.usecase.ImportEpubUseCase
 import com.mipuble.domain.usecase.ObserveCategoriesUseCase
 import com.mipuble.domain.usecase.ObserveDownloadsUseCase
 import com.mipuble.domain.usecase.ObserveLibraryUseCase
+import com.mipuble.domain.usecase.ObserveUploadsUseCase
 import com.mipuble.domain.usecase.SaveCustomOrderUseCase
 import com.mipuble.domain.usecase.SyncRemoteLibraryUseCase
 import com.mipuble.domain.usecase.UpdateCategoryUseCase
+import com.mipuble.domain.usecase.UploadBooksToDriveUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -43,6 +46,7 @@ data class LibraryUiState(
     val selectedCategoryId: Long? = null,
     val downloads: Map<Long, DownloadStatus> = emptyMap(),
     val isSyncing: Boolean = false,
+    val upload: UploadProgress? = null,
     val pendingConsent: PendingIntent? = null,
 ) {
     /**
@@ -59,7 +63,9 @@ class LibraryViewModel @Inject constructor(
     observeLibrary: ObserveLibraryUseCase,
     observeCategories: ObserveCategoriesUseCase,
     observeDownloads: ObserveDownloadsUseCase,
+    observeUploads: ObserveUploadsUseCase,
     private val importEpub: ImportEpubUseCase,
+    private val uploadBooks: UploadBooksToDriveUseCase,
     private val createCategory: CreateCategoryUseCase,
     private val updateCategory: UpdateCategoryUseCase,
     private val deleteCategory: DeleteCategoryUseCase,
@@ -92,13 +98,18 @@ class LibraryViewModel @Inject constructor(
                 ) { books, categories -> Triple(sort, category, books to categories) }
             }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val syncUploadConsent =
+        combine(isSyncing, observeUploads(), pendingConsent) { syncing, upload, consent ->
+            Triple(syncing, upload, consent)
+        }
+
     val uiState: StateFlow<LibraryUiState> =
         combine(
             libraryAndCategories,
             observeDownloads(),
-            isSyncing,
-            pendingConsent,
-        ) { (sort, category, data), downloads, syncing, consent ->
+            syncUploadConsent,
+        ) { (sort, category, data), downloads, (syncing, upload, consent) ->
             val (books, categories) = data
             LibraryUiState(
                 isLoading = false,
@@ -108,6 +119,7 @@ class LibraryViewModel @Inject constructor(
                 selectedCategoryId = category,
                 downloads = downloads,
                 isSyncing = syncing,
+                upload = upload,
                 pendingConsent = consent,
             )
         }.stateIn(
@@ -210,6 +222,23 @@ class LibraryViewModel @Inject constructor(
     /** Launching the consent PendingIntent itself failed. */
     fun onConsentLaunchFailed(message: String?) {
         _messages.update { "Couldn't open the Google consent screen: ${message ?: "unknown error"}" }
+    }
+
+    fun onUploadBooks(uriStrings: List<String>) {
+        if (uriStrings.isEmpty()) return
+        viewModelScope.launch {
+            uploadBooks(uriStrings)
+                .onSuccess { count -> _messages.update { "Uploaded $count book(s) to Drive." } }
+                .onFailure { e ->
+                    val consent = e as? NeedConsentException ?: e.cause as? NeedConsentException
+                    if (consent != null) {
+                        pendingConsent.value = consent.intent
+                        _messages.update { "Grant Drive access, then upload again." }
+                    } else {
+                        _messages.update { e.message ?: "Upload failed." }
+                    }
+                }
+        }
     }
 
     fun onDownload(bookId: Long) {

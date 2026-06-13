@@ -50,7 +50,29 @@ class EpubImporter @Inject constructor(
         }
     }
 
-    private suspend fun finishImport(file: File): Long {
+    /** Copies an arbitrary file into book storage; used by the Drive uploader. */
+    fun copyIntoStorage(source: File): File {
+        val target = File(booksDir(), "${UUID.randomUUID()}.epub")
+        source.inputStream().use { input -> target.outputStream().use { input.copyTo(it) } }
+        return target
+    }
+
+    /**
+     * Registers an EPUB that already lives in book storage. [remoteId]/[remoteSize]
+     * are set when the file is also backed by Drive (e.g. just uploaded), so the
+     * book is both local and remote.
+     */
+    suspend fun register(
+        file: File,
+        remoteId: String? = null,
+        remoteSize: Long? = null,
+    ): Long = finishImport(file, remoteId, remoteSize)
+
+    private suspend fun finishImport(
+        file: File,
+        remoteId: String? = null,
+        remoteSize: Long? = null,
+    ): Long {
         val epub = parser.parse(file)
         val id = bookDao.insert(
             BookEntity(
@@ -58,6 +80,8 @@ class EpubImporter @Inject constructor(
                 author = epub.author.ifBlank { "Unknown" },
                 addedAt = System.currentTimeMillis(),
                 filePath = file.absolutePath,
+                remoteId = remoteId,
+                remoteSizeBytes = remoteSize,
             ),
         )
         // New books join the end of the hand-arranged order (ids are monotonic).

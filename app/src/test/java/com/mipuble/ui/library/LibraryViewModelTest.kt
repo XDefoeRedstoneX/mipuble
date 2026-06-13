@@ -18,9 +18,11 @@ import com.mipuble.domain.usecase.ImportEpubUseCase
 import com.mipuble.domain.usecase.ObserveCategoriesUseCase
 import com.mipuble.domain.usecase.ObserveDownloadsUseCase
 import com.mipuble.domain.usecase.ObserveLibraryUseCase
+import com.mipuble.domain.usecase.ObserveUploadsUseCase
 import com.mipuble.domain.usecase.SaveCustomOrderUseCase
 import com.mipuble.domain.usecase.SyncRemoteLibraryUseCase
 import com.mipuble.domain.usecase.UpdateCategoryUseCase
+import com.mipuble.domain.usecase.UploadBooksToDriveUseCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -71,10 +73,13 @@ class LibraryViewModelTest {
 
     private class FakeRemoteRepository : RemoteLibraryRepository {
         override val downloads: Flow<Map<Long, DownloadStatus>> = MutableStateFlow(emptyMap())
+        override val uploads: Flow<com.mipuble.domain.model.UploadProgress?> = MutableStateFlow(null)
         override suspend fun isAvailable(): Boolean = true
         override suspend fun sync(): Result<Int> = Result.success(2)
         override suspend fun download(bookId: Long): Result<Unit> = Result.success(Unit)
         override suspend fun evict(bookId: Long): Result<Unit> = Result.success(Unit)
+        override suspend fun uploadBooks(uriStrings: List<String>): Result<Int> = Result.success(uriStrings.size)
+        override suspend fun resetToDrive(uploadLocalFirst: Boolean): Result<Int> = Result.success(0)
     }
 
     private val bookRepository = FakeBookRepository(
@@ -94,7 +99,9 @@ class LibraryViewModelTest {
             observeLibrary = ObserveLibraryUseCase(bookRepository),
             observeCategories = ObserveCategoriesUseCase(categoryRepository),
             observeDownloads = ObserveDownloadsUseCase(remoteRepository),
+            observeUploads = ObserveUploadsUseCase(remoteRepository),
             importEpub = ImportEpubUseCase(bookRepository),
+            uploadBooks = UploadBooksToDriveUseCase(remoteRepository),
             createCategory = CreateCategoryUseCase(categoryRepository),
             updateCategory = UpdateCategoryUseCase(categoryRepository),
             deleteCategory = DeleteCategoryUseCase(categoryRepository),

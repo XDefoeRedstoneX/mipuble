@@ -23,6 +23,7 @@ class FakeRemoteLibrarySource @Inject constructor(
 ) : RemoteLibrarySource {
 
     // A series, specifically to show natural sorting working on remote books too.
+    // Mutable so simulated uploads appear in the "folder" on the next sync.
     private val catalog = buildList {
         repeat(8) { index ->
             add(
@@ -36,11 +37,32 @@ class FakeRemoteLibrarySource @Inject constructor(
         }
         add(RemoteBook("fake-tidal", "Tidal Mechanics", "R. Okonkwo", 6_800_000L))
         add(RemoteBook("fake-lanterns", "A Field of Lanterns", "Yuki Sato", 5_100_000L))
-    }
+    }.toMutableList()
 
     override suspend fun isAvailable(): Boolean = true
 
-    override suspend fun listBooks(): List<RemoteBook> = catalog
+    override suspend fun listBooks(): List<RemoteBook> = catalog.toList()
+
+    override suspend fun uploadBook(
+        file: File,
+        displayName: String,
+        onProgress: (Float) -> Unit,
+    ): RemoteBook {
+        // Simulate a chunked upload so the progress UI animates.
+        for (i in 1..10) {
+            onProgress(i / 10f)
+            delay(40)
+        }
+        val name = displayName.removeSuffix(".epub")
+        val book = RemoteBook(
+            remoteId = "fake-upload-${java.util.UUID.randomUUID()}",
+            title = name,
+            author = "",
+            sizeBytes = file.length(),
+        )
+        catalog.add(book)
+        return book
+    }
 
     override suspend fun fetchCover(remoteId: String): ByteArray? {
         val sample = cachedSample() ?: return null

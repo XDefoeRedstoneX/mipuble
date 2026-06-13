@@ -14,3 +14,11 @@ data class RemoteBook(
     val author: String,
     val sizeBytes: Long,
 )
+
+/** Progress of an in-flight upload batch; null when idle. */
+data class UploadProgress(
+    val currentIndex: Int,
+    val total: Int,
+    val fileName: String,
+    val fraction: Float,
+)
