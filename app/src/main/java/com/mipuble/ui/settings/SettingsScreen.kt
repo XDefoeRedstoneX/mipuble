@@ -1,5 +1,9 @@
 package com.mipuble.ui.settings
 
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,11 +19,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -36,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -55,11 +62,35 @@ fun SettingsScreen(
     val message by viewModel.messages.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var showDriveGuide by remember { mutableStateOf(false) }
+    var showReset by remember { mutableStateOf(false) }
 
     LaunchedEffect(message) {
         message?.let {
             snackbarHostState.showSnackbar(it)
             viewModel.onMessageShown()
+        }
+    }
+
+    // Drive consent launcher (so Sync / Reset can grant access from here too).
+    val authLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult(),
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            viewModel.onConsentResult(result.data)
+        } else {
+            viewModel.onConsentCanceled(result.resultCode)
+        }
+    }
+    LaunchedEffect(uiState.pendingConsent) {
+        val consent = uiState.pendingConsent
+        if (consent != null) {
+            try {
+                authLauncher.launch(IntentSenderRequest.Builder(consent).build())
+            } catch (e: Exception) {
+                viewModel.onConsentLaunchFailed(e.message)
+            } finally {
+                viewModel.onConsentShown()
+            }
         }
     }
 
@@ -118,19 +149,15 @@ fun SettingsScreen(
             HorizontalDivider()
 
             SectionTitle("Google Drive")
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        if (uiState.remoteAvailable) "Connected (offline demo library)" else "Not connected",
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    Text(
-                        "Real Google Drive needs a one-time developer setup.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
+            Text(
+                if (uiState.remoteAvailable) "Connected to Google Drive" else "Not connected",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                "Books sync from the \"mipuble\" folder in your Drive.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(onClick = viewModel::onSyncNow, enabled = !uiState.isSyncing) {
                     if (uiState.isSyncing) {
@@ -140,8 +167,30 @@ fun SettingsScreen(
                     Text("Sync now")
                 }
                 OutlinedButton(onClick = { showDriveGuide = true }) {
-                    Text("Connect Google Drive…")
+                    Text("Setup help…")
                 }
+            }
+
+            // Live progress for an upload batch or a running reset.
+            uiState.upload?.let { up ->
+                Text(
+                    "Uploading ${up.currentIndex}/${up.total}: ${up.fileName}",
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                LinearProgressIndicator(progress = { up.fraction }, modifier = Modifier.fillMaxWidth())
+            }
+
+            OutlinedButton(
+                onClick = { showReset = true },
+                enabled = !uiState.isResetting && uiState.upload == null,
+            ) {
+                if (uiState.isResetting) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text("Reset library to Drive…")
             }
 
             HorizontalDivider()
@@ -175,6 +224,61 @@ fun SettingsScreen(
     if (showDriveGuide) {
         DriveSetupGuideDialog(onDismiss = { showDriveGuide = false })
     }
+
+    if (showReset) {
+        ResetToDriveDialog(
+            localOnlyCount = uiState.localOnlyCount,
+            onConfirm = { uploadFirst ->
+                showReset = false
+                viewModel.onResetToDrive(uploadFirst)
+            },
+            onDismiss = { showReset = false },
+        )
+    }
+}
+
+/**
+ * Confirms the destructive reset: the local library is replaced by the Drive
+ * folder's contents. Local-only books can be uploaded first so nothing is lost.
+ */
+@Composable
+private fun ResetToDriveDialog(
+    localOnlyCount: Int,
+    onConfirm: (uploadFirst: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var uploadFirst by remember { mutableStateOf(true) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Reset library to Drive") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Your library will be replaced with the books in your Drive " +
+                        "\"mipuble\" folder. Reading progress and categories are kept by file.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (localOnlyCount > 0) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = uploadFirst, onCheckedChange = { uploadFirst = it })
+                        Text(
+                            "Upload $localOnlyCount device-only book(s) first",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(uploadFirst) }) {
+                Text("Reset", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 @Composable
