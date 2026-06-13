@@ -114,6 +114,18 @@ class RemoteLibraryRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun deleteBook(bookId: Long, alsoFromDrive: Boolean): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            val book = bookDao.getById(bookId)
+                ?: return@withContext Result.failure(IllegalStateException("No such book"))
+            runCatching {
+                if (alsoFromDrive) book.remoteId?.let { source.trashBook(it) }
+                book.filePath?.let { File(it).delete() }
+                book.coverPath?.let { File(it).delete() }
+                bookDao.deleteById(bookId)
+            }
+        }
+
     override suspend fun uploadBooks(uriStrings: List<String>): Result<Int> =
         withContext(Dispatchers.IO) {
             runCatching {

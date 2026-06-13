@@ -32,6 +32,13 @@ class ResetLibraryToDriveUseCase @Inject constructor(
         repository.resetToDrive(uploadLocalFirst)
 }
 
+class DeleteBookUseCase @Inject constructor(
+    private val repository: RemoteLibraryRepository,
+) {
+    suspend operator fun invoke(bookId: Long, alsoFromDrive: Boolean): Result<Unit> =
+        repository.deleteBook(bookId, alsoFromDrive)
+}
+
 class CheckRemoteAvailabilityUseCase @Inject constructor(
     private val repository: RemoteLibraryRepository,
 ) {

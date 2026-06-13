@@ -11,6 +11,7 @@ import com.mipuble.domain.repository.RemoteLibraryRepository
 import com.mipuble.domain.sort.BookSortOption
 import com.mipuble.domain.usecase.AssignBookCategoryUseCase
 import com.mipuble.domain.usecase.CreateCategoryUseCase
+import com.mipuble.domain.usecase.DeleteBookUseCase
 import com.mipuble.domain.usecase.DeleteCategoryUseCase
 import com.mipuble.domain.usecase.DownloadBookUseCase
 import com.mipuble.domain.usecase.EvictBookUseCase
@@ -80,6 +81,7 @@ class LibraryViewModelTest {
         override suspend fun evict(bookId: Long): Result<Unit> = Result.success(Unit)
         override suspend fun uploadBooks(uriStrings: List<String>): Result<Int> = Result.success(uriStrings.size)
         override suspend fun resetToDrive(uploadLocalFirst: Boolean): Result<Int> = Result.success(0)
+        override suspend fun deleteBook(bookId: Long, alsoFromDrive: Boolean): Result<Unit> = Result.success(Unit)
     }
 
     private val bookRepository = FakeBookRepository(
@@ -110,6 +112,7 @@ class LibraryViewModelTest {
             syncRemoteLibrary = SyncRemoteLibraryUseCase(remoteRepository),
             downloadBook = DownloadBookUseCase(remoteRepository),
             evictBook = EvictBookUseCase(remoteRepository),
+            deleteBook = DeleteBookUseCase(remoteRepository),
             driveAuthProvider = UnconfiguredDriveAuthProvider(),
         )
     }

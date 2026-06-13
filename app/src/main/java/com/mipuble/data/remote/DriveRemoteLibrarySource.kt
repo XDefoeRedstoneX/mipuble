@@ -116,6 +116,21 @@ class DriveRemoteLibrarySource @Inject constructor(
         }
     }
 
+    override suspend fun trashBook(remoteId: String) {
+        val token = token() ?: error("Not signed in to Drive")
+        // trashed=true moves it to Drive's trash (recoverable), not a hard delete.
+        val body = JSONObject().put("trashed", true).toString()
+            .toRequestBody("application/json; charset=UTF-8".toMediaType())
+        val request = Request.Builder()
+            .url("$BASE/files/$remoteId")
+            .header("Authorization", "Bearer $token")
+            .patch(body)
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) error("Drive trash failed: ${response.code}")
+        }
+    }
+
     /** Finds the app's "mipuble" folder, creating it if absent; caches the id. */
     private fun ensureFolderId(token: String): String {
         cachedFolderId?.let { return it }

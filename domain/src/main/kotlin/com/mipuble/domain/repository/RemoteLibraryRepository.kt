@@ -43,4 +43,11 @@ interface RemoteLibraryRepository {
      * are preserved by Drive file id. Returns the resulting book count.
      */
     suspend fun resetToDrive(uploadLocalFirst: Boolean): Result<Int>
+
+    /**
+     * Removes a book from the library (deletes its local file + cover). When
+     * [alsoFromDrive] is true and the book is remote, its Drive copy is moved
+     * to trash (recoverable).
+     */
+    suspend fun deleteBook(bookId: Long, alsoFromDrive: Boolean): Result<Unit>
 }

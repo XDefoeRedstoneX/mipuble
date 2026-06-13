@@ -42,6 +42,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -152,6 +153,7 @@ fun LibraryScreen(
     }
 
     var assigningBook by remember { mutableStateOf<Book?>(null) }
+    var deletingBook by remember { mutableStateOf<Book?>(null) }
     var editingCategory by remember { mutableStateOf<Category?>(null) }
     var creatingCategory by remember { mutableStateOf(false) }
 
@@ -206,7 +208,22 @@ fun LibraryScreen(
                 viewModel.onEvict(book.id)
                 assigningBook = null
             },
+            onDelete = {
+                assigningBook = null
+                deletingBook = book
+            },
             onDismiss = { assigningBook = null },
+        )
+    }
+
+    deletingBook?.let { book ->
+        DeleteBookDialog(
+            book = book,
+            onConfirm = { alsoFromDrive ->
+                viewModel.onDeleteBook(book.id, alsoFromDrive)
+                deletingBook = null
+            },
+            onDismiss = { deletingBook = null },
         )
     }
 
@@ -420,35 +437,38 @@ fun LibraryContent(
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
         ) {
+            // Banner occupies its own row above the grid (not overlapping it).
             uiState.upload?.let { UploadBanner(it) }
-            when {
-                uiState.isLoading -> Unit
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                when {
+                    uiState.isLoading -> Unit
 
-                uiState.books.isEmpty() -> {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = if (uiState.selectedCategoryId != null) {
-                                "No books in this category yet.\nLong-press a book to file it here."
-                            } else {
-                                "Your library is empty.\nTap + to import an EPUB."
-                            },
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                    uiState.books.isEmpty() -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(
+                                text = if (uiState.selectedCategoryId != null) {
+                                    "No books in this category yet.\nLong-press a book to file it here."
+                                } else {
+                                    "Your library is empty.\nTap + to import an EPUB."
+                                },
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
-                }
 
-                else -> BookGrid(
-                    uiState = uiState,
-                    onBookClick = onBookClick,
-                    onBookLongPress = onBookLongPress,
-                    onReorder = onReorder,
-                )
+                    else -> BookGrid(
+                        uiState = uiState,
+                        onBookClick = onBookClick,
+                        onBookLongPress = onBookLongPress,
+                        onReorder = onReorder,
+                    )
+                }
             }
         }
     }
@@ -524,6 +544,7 @@ private fun AssignCategoryDialog(
     categories: List<Category>,
     onAssign: (Long?) -> Unit,
     onEvict: () -> Unit,
+    onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
@@ -545,6 +566,10 @@ private fun AssignCategoryDialog(
                         onClick = { onAssign(category.id) },
                     )
                 }
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                TextButton(onClick = onDelete) {
+                    Text("Delete book…", color = MaterialTheme.colorScheme.error)
+                }
             }
         },
         confirmButton = {
@@ -555,6 +580,49 @@ private fun AssignCategoryDialog(
             { TextButton(onClick = onEvict) { Text("Remove download") } }
         } else {
             null
+        },
+    )
+}
+
+/**
+ * Confirms removing a book. If the book is in Drive, an opt-in moves the Drive
+ * copy to trash (recoverable) as well; otherwise it's just removed locally.
+ */
+@Composable
+private fun DeleteBookDialog(
+    book: Book,
+    onConfirm: (alsoFromDrive: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var alsoFromDrive by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete book") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    "Remove \"${book.title}\" from your library?",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (book.isRemote) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = alsoFromDrive, onCheckedChange = { alsoFromDrive = it })
+                        Text(
+                            "Also move the Drive copy to trash",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(alsoFromDrive) }) {
+                Text("Delete", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         },
     )
 }

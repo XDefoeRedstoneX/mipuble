@@ -64,6 +64,10 @@ class FakeRemoteLibrarySource @Inject constructor(
         return book
     }
 
+    override suspend fun trashBook(remoteId: String) {
+        catalog.removeAll { it.remoteId == remoteId }
+    }
+
     override suspend fun fetchCover(remoteId: String): ByteArray? {
         val sample = cachedSample() ?: return null
         val epub = runCatching { parser.parse(sample) }.getOrNull() ?: return null

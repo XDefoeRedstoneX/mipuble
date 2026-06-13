@@ -14,6 +14,7 @@ import com.mipuble.domain.model.UploadProgress
 import com.mipuble.domain.sort.BookSortOption
 import com.mipuble.domain.usecase.AssignBookCategoryUseCase
 import com.mipuble.domain.usecase.CreateCategoryUseCase
+import com.mipuble.domain.usecase.DeleteBookUseCase
 import com.mipuble.domain.usecase.DeleteCategoryUseCase
 import com.mipuble.domain.usecase.DownloadBookUseCase
 import com.mipuble.domain.usecase.EvictBookUseCase
@@ -74,6 +75,7 @@ class LibraryViewModel @Inject constructor(
     private val syncRemoteLibrary: SyncRemoteLibraryUseCase,
     private val downloadBook: DownloadBookUseCase,
     private val evictBook: EvictBookUseCase,
+    private val deleteBook: DeleteBookUseCase,
     private val driveAuthProvider: DriveAuthProvider,
 ) : ViewModel() {
 
@@ -252,6 +254,18 @@ class LibraryViewModel @Inject constructor(
             evictBook(bookId)
                 .onSuccess { _messages.update { "Download removed — metadata kept." } }
                 .onFailure { _messages.update { "Couldn't remove the download." } }
+        }
+    }
+
+    fun onDeleteBook(bookId: Long, alsoFromDrive: Boolean) {
+        viewModelScope.launch {
+            deleteBook(bookId, alsoFromDrive)
+                .onSuccess {
+                    _messages.update {
+                        if (alsoFromDrive) "Deleted — Drive copy moved to trash." else "Removed from library."
+                    }
+                }
+                .onFailure { e -> _messages.update { e.message ?: "Couldn't delete the book." } }
         }
     }
 

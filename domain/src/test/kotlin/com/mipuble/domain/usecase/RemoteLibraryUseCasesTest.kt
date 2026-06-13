@@ -43,6 +43,12 @@ class RemoteLibraryUseCasesTest {
             resetUploadedFirst = uploadLocalFirst
             return Result.success(0)
         }
+
+        var deleted: Pair<Long, Boolean>? = null
+        override suspend fun deleteBook(bookId: Long, alsoFromDrive: Boolean): Result<Unit> {
+            deleted = bookId to alsoFromDrive
+            return Result.success(Unit)
+        }
     }
 
     @Test
@@ -89,6 +95,15 @@ class RemoteLibraryUseCasesTest {
         ResetLibraryToDriveUseCase(repository)(uploadLocalFirst = true)
 
         assertEquals(true, repository.resetUploadedFirst)
+    }
+
+    @Test
+    fun `delete forwards the book id and drive flag`() = runTest {
+        val repository = FakeRemoteRepository()
+
+        DeleteBookUseCase(repository)(bookId = 11L, alsoFromDrive = true)
+
+        assertEquals(11L to true, repository.deleted)
     }
 
     @Test

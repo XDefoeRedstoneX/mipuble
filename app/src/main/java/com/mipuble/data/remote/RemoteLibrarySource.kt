@@ -34,4 +34,7 @@ interface RemoteLibrarySource {
         displayName: String,
         onProgress: (Float) -> Unit,
     ): RemoteBook
+
+    /** Moves the remote book to the backend's trash (recoverable, not erased). */
+    suspend fun trashBook(remoteId: String)
 }
