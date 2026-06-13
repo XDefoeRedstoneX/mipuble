@@ -127,6 +127,11 @@ fun LibraryScreen(
         ActivityResultContracts.OpenMultipleDocuments(),
     ) { uris -> viewModel.onUploadBooks(uris.map { it.toString() }) }
 
+    // Pick a folder; every EPUB under it (recursively) is uploaded.
+    val folderPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree(),
+    ) { uri -> uri?.let { viewModel.onUploadFolder(it.toString()) } }
+
     val authLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
@@ -183,7 +188,8 @@ fun LibraryScreen(
             onSortSelected = viewModel::onSortSelected,
             onImportClick = { picker.launch(arrayOf("application/epub+zip", "*/*")) },
             onSync = viewModel::onSync,
-            onUploadClick = { uploadPicker.launch(arrayOf("application/epub+zip", "*/*")) },
+            onUploadFiles = { uploadPicker.launch(arrayOf("application/epub+zip", "*/*")) },
+            onUploadFolder = { folderPicker.launch(null) },
             onBookClick = { book ->
                 when {
                     book.isDownloaded -> onOpenBook(book.id)
@@ -392,7 +398,8 @@ fun LibraryContent(
     onSortSelected: (BookSortOption) -> Unit,
     onImportClick: () -> Unit,
     onSync: () -> Unit,
-    onUploadClick: () -> Unit,
+    onUploadFiles: () -> Unit,
+    onUploadFolder: () -> Unit,
     onBookClick: (Book) -> Unit,
     onBookLongPress: (Book) -> Unit,
     onReorder: (List<Long>) -> Unit,
@@ -410,12 +417,11 @@ fun LibraryContent(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onUploadClick, enabled = uiState.upload == null) {
-                        Icon(
-                            painter = painterResource(com.mipuble.R.drawable.ic_cloud_upload),
-                            contentDescription = "Upload to Drive",
-                        )
-                    }
+                    UploadMenu(
+                        enabled = uiState.upload == null,
+                        onFiles = onUploadFiles,
+                        onFolder = onUploadFolder,
+                    )
                     IconButton(onClick = onSync, enabled = !uiState.isSyncing) {
                         if (uiState.isSyncing) {
                             CircularProgressIndicator(
@@ -754,6 +760,38 @@ private fun CategoryEditorDialog(
             }
         },
     )
+}
+
+@Composable
+private fun UploadMenu(
+    enabled: Boolean,
+    onFiles: () -> Unit,
+    onFolder: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    IconButton(onClick = { expanded = true }, enabled = enabled) {
+        Icon(
+            painter = painterResource(com.mipuble.R.drawable.ic_cloud_upload),
+            contentDescription = "Upload to Drive",
+        )
+    }
+    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        DropdownMenuItem(
+            text = { Text("Upload files…") },
+            onClick = {
+                expanded = false
+                onFiles()
+            },
+        )
+        DropdownMenuItem(
+            text = { Text("Upload folder…") },
+            onClick = {
+                expanded = false
+                onFolder()
+            },
+        )
+    }
 }
 
 @Composable

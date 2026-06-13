@@ -23,7 +23,10 @@ import com.mipuble.domain.usecase.ObserveUploadsUseCase
 import com.mipuble.domain.usecase.SaveCustomOrderUseCase
 import com.mipuble.domain.usecase.SyncRemoteLibraryUseCase
 import com.mipuble.domain.usecase.UpdateCategoryUseCase
+import com.mipuble.domain.model.ImportOutcome
+import com.mipuble.domain.model.UploadSummary
 import com.mipuble.domain.usecase.UploadBooksToDriveUseCase
+import com.mipuble.domain.usecase.UploadFolderToDriveUseCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,13 +55,13 @@ class LibraryViewModelTest {
     private class FakeBookRepository(
         val books: MutableStateFlow<List<Book>>,
     ) : BookRepository {
-        var importResult: Result<Long> = Result.success(1L)
+        var importResult: Result<ImportOutcome> = Result.success(ImportOutcome.Added(1L))
         var savedOrder: List<Long>? = null
 
         override fun observeBooks(): Flow<List<Book>> = books
         override suspend fun getBook(id: Long): Book? = books.value.firstOrNull { it.id == id }
         override suspend fun updateReadingPosition(id: Long, chapter: Int, progress: Float) = Unit
-        override suspend fun importBook(uriString: String): Result<Long> = importResult
+        override suspend fun importBook(uriString: String): Result<ImportOutcome> = importResult
         override suspend fun setBookCategory(bookId: Long, categoryId: Long?) = Unit
         override suspend fun saveCustomOrder(orderedBookIds: List<Long>) {
             savedOrder = orderedBookIds
@@ -79,7 +82,10 @@ class LibraryViewModelTest {
         override suspend fun sync(): Result<Int> = Result.success(2)
         override suspend fun download(bookId: Long): Result<Unit> = Result.success(Unit)
         override suspend fun evict(bookId: Long): Result<Unit> = Result.success(Unit)
-        override suspend fun uploadBooks(uriStrings: List<String>): Result<Int> = Result.success(uriStrings.size)
+        override suspend fun uploadBooks(uriStrings: List<String>): Result<UploadSummary> =
+            Result.success(UploadSummary(uriStrings.size, 0))
+        override suspend fun uploadFolder(treeUriString: String): Result<UploadSummary> =
+            Result.success(UploadSummary(0, 0))
         override suspend fun resetToDrive(uploadLocalFirst: Boolean): Result<Int> = Result.success(0)
         override suspend fun deleteBook(bookId: Long, alsoFromDrive: Boolean): Result<Unit> = Result.success(Unit)
     }
@@ -104,6 +110,7 @@ class LibraryViewModelTest {
             observeUploads = ObserveUploadsUseCase(remoteRepository),
             importEpub = ImportEpubUseCase(bookRepository),
             uploadBooks = UploadBooksToDriveUseCase(remoteRepository),
+            uploadFolder = UploadFolderToDriveUseCase(remoteRepository),
             createCategory = CreateCategoryUseCase(categoryRepository),
             updateCategory = UpdateCategoryUseCase(categoryRepository),
             deleteCategory = DeleteCategoryUseCase(categoryRepository),

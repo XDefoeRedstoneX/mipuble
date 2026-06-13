@@ -2,6 +2,7 @@ package com.mipuble.domain.usecase
 
 import com.mipuble.domain.model.DownloadStatus
 import com.mipuble.domain.model.UploadProgress
+import com.mipuble.domain.model.UploadSummary
 import com.mipuble.domain.repository.RemoteLibraryRepository
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
@@ -21,8 +22,15 @@ class ObserveUploadsUseCase @Inject constructor(
 class UploadBooksToDriveUseCase @Inject constructor(
     private val repository: RemoteLibraryRepository,
 ) {
-    suspend operator fun invoke(uriStrings: List<String>): Result<Int> =
+    suspend operator fun invoke(uriStrings: List<String>): Result<UploadSummary> =
         repository.uploadBooks(uriStrings)
+}
+
+class UploadFolderToDriveUseCase @Inject constructor(
+    private val repository: RemoteLibraryRepository,
+) {
+    suspend operator fun invoke(treeUriString: String): Result<UploadSummary> =
+        repository.uploadFolder(treeUriString)
 }
 
 class ResetLibraryToDriveUseCase @Inject constructor(

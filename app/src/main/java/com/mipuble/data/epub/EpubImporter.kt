@@ -4,8 +4,10 @@ import android.content.Context
 import android.net.Uri
 import com.mipuble.data.local.BookDao
 import com.mipuble.data.local.BookEntity
+import com.mipuble.domain.model.ImportOutcome
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.security.MessageDigest
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -25,17 +27,27 @@ class EpubImporter @Inject constructor(
     private val bookDao: BookDao,
 ) {
 
-    /** Imports from a SAF content Uri chosen by the user. */
-    suspend fun import(uriString: String): Result<Long> = withContext(Dispatchers.IO) {
+    /** Imports from a SAF content Uri chosen by the user; auto-skips duplicates. */
+    suspend fun import(uriString: String): Result<ImportOutcome> = withContext(Dispatchers.IO) {
         runCatching {
             val uri = Uri.parse(uriString)
             val target = File(booksDir(), "${UUID.randomUUID()}.epub")
             context.contentResolver.openInputStream(uri)?.use { input ->
                 target.outputStream().use { input.copyTo(it) }
             } ?: error("Could not open $uriString")
-            finishImport(target)
+
+            val hash = sha256(target)
+            if (bookDao.findByHash(hash) != null) {
+                target.delete()
+                ImportOutcome.Duplicate
+            } else {
+                ImportOutcome.Added(finishImport(target, contentHash = hash))
+            }
         }
     }
+
+    /** True if a book with the same bytes is already in the library. */
+    suspend fun isDuplicate(file: File): Boolean = bookDao.findByHash(sha256(file)) != null
 
     /** Imports a sample book bundled in assets; used to seed the demo library. */
     suspend fun importFromAsset(assetName: String): Result<Long> = withContext(Dispatchers.IO) {
@@ -66,12 +78,13 @@ class EpubImporter @Inject constructor(
         file: File,
         remoteId: String? = null,
         remoteSize: Long? = null,
-    ): Long = finishImport(file, remoteId, remoteSize)
+    ): Long = finishImport(file, remoteId, remoteSize, contentHash = sha256(file))
 
     private suspend fun finishImport(
         file: File,
         remoteId: String? = null,
         remoteSize: Long? = null,
+        contentHash: String? = null,
     ): Long {
         val epub = parser.parse(file)
         val id = bookDao.insert(
@@ -82,6 +95,7 @@ class EpubImporter @Inject constructor(
                 filePath = file.absolutePath,
                 remoteId = remoteId,
                 remoteSizeBytes = remoteSize,
+                contentHash = contentHash,
             ),
         )
         // New books join the end of the hand-arranged order (ids are monotonic).
@@ -96,6 +110,19 @@ class EpubImporter @Inject constructor(
             }
         }
         return id
+    }
+
+    private fun sha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val n = input.read(buffer)
+                if (n < 0) break
+                digest.update(buffer, 0, n)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     private fun booksDir() = File(context.filesDir, "books").apply { mkdirs() }

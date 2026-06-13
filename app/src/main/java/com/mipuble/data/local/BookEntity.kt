@@ -19,6 +19,8 @@ data class BookEntity(
     @ColumnInfo(name = "custom_order") val customOrder: Long = 0,
     @ColumnInfo(name = "remote_id") val remoteId: String? = null,
     @ColumnInfo(name = "remote_size_bytes") val remoteSizeBytes: Long? = null,
+    /** SHA-256 of the EPUB bytes, for duplicate detection. */
+    @ColumnInfo(name = "content_hash") val contentHash: String? = null,
 )
 
 fun BookEntity.toDomain() = Book(

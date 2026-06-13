@@ -36,6 +36,9 @@ interface BookDao {
     @Query("SELECT remote_id FROM books WHERE remote_id IS NOT NULL")
     suspend fun remoteIds(): List<String>
 
+    @Query("SELECT * FROM books WHERE content_hash = :hash LIMIT 1")
+    suspend fun findByHash(hash: String): BookEntity?
+
     @Query("UPDATE books SET file_path = :filePath WHERE id = :id")
     suspend fun updateFilePath(id: Long, filePath: String?)
 

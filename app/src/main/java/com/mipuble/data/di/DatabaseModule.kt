@@ -37,6 +37,7 @@ object DatabaseModule {
                 MipubleDatabase.MIGRATION_1_2,
                 MipubleDatabase.MIGRATION_2_3,
                 MipubleDatabase.MIGRATION_3_4,
+                MipubleDatabase.MIGRATION_4_5,
             )
             .addCallback(
                 object : RoomDatabase.Callback() {

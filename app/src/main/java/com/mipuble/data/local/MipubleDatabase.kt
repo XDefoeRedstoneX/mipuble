@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [BookEntity::class, CategoryEntity::class],
-    version = 4,
+    version = 5,
     exportSchema = false,
 )
 abstract class MipubleDatabase : RoomDatabase() {
@@ -46,6 +46,13 @@ abstract class MipubleDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE books ADD COLUMN remote_id TEXT")
                 db.execSQL("ALTER TABLE books ADD COLUMN remote_size_bytes INTEGER")
+            }
+        }
+
+        /** Adds the content hash used for duplicate detection. */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE books ADD COLUMN content_hash TEXT")
             }
         }
     }

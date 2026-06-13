@@ -2,6 +2,7 @@ package com.mipuble.domain.repository
 
 import com.mipuble.domain.model.DownloadStatus
 import com.mipuble.domain.model.UploadProgress
+import com.mipuble.domain.model.UploadSummary
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -31,10 +32,17 @@ interface RemoteLibraryRepository {
     suspend fun evict(bookId: Long): Result<Unit>
 
     /**
-     * Uploads local EPUBs (given as content-Uri strings) into the Drive folder,
-     * keeping a readable local copy. Returns how many succeeded.
+     * Uploads local EPUBs (content-Uri strings) into the Drive folder, keeping
+     * a readable local copy. Books already present (by content or name) are
+     * skipped. Returns the added/skipped tally.
      */
-    suspend fun uploadBooks(uriStrings: List<String>): Result<Int>
+    suspend fun uploadBooks(uriStrings: List<String>): Result<UploadSummary>
+
+    /**
+     * Recursively finds every EPUB under a picked folder (SAF tree Uri) and
+     * uploads them, skipping duplicates. Returns the added/skipped tally.
+     */
+    suspend fun uploadFolder(treeUriString: String): Result<UploadSummary>
 
     /**
      * Makes the local library mirror the Drive folder. When [uploadLocalFirst]

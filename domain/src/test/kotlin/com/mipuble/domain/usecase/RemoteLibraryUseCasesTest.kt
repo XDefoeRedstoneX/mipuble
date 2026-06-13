@@ -34,9 +34,15 @@ class RemoteLibraryUseCasesTest {
             return Result.success(Unit)
         }
 
-        override suspend fun uploadBooks(uriStrings: List<String>): Result<Int> {
+        var uploadedFolder: String? = null
+        override suspend fun uploadBooks(uriStrings: List<String>): Result<com.mipuble.domain.model.UploadSummary> {
             uploadedBatch = uriStrings
-            return Result.success(uriStrings.size)
+            return Result.success(com.mipuble.domain.model.UploadSummary(uriStrings.size, 0))
+        }
+
+        override suspend fun uploadFolder(treeUriString: String): Result<com.mipuble.domain.model.UploadSummary> {
+            uploadedFolder = treeUriString
+            return Result.success(com.mipuble.domain.model.UploadSummary(0, 0))
         }
 
         override suspend fun resetToDrive(uploadLocalFirst: Boolean): Result<Int> {
@@ -84,8 +90,17 @@ class RemoteLibraryUseCasesTest {
 
         val result = UploadBooksToDriveUseCase(repository)(listOf("a", "b"))
 
-        assertEquals(2, result.getOrNull())
+        assertEquals(2, result.getOrNull()?.added)
         assertEquals(listOf("a", "b"), repository.uploadedBatch)
+    }
+
+    @Test
+    fun `upload folder forwards the tree uri`() = runTest {
+        val repository = FakeRemoteRepository()
+
+        UploadFolderToDriveUseCase(repository)("content://tree/x")
+
+        assertEquals("content://tree/x", repository.uploadedFolder)
     }
 
     @Test

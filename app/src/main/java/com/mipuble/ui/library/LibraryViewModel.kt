@@ -10,7 +10,9 @@ import com.mipuble.data.remote.NeedConsentException
 import com.mipuble.domain.model.Book
 import com.mipuble.domain.model.Category
 import com.mipuble.domain.model.DownloadStatus
+import com.mipuble.domain.model.ImportOutcome
 import com.mipuble.domain.model.UploadProgress
+import com.mipuble.domain.model.UploadSummary
 import com.mipuble.domain.sort.BookSortOption
 import com.mipuble.domain.usecase.AssignBookCategoryUseCase
 import com.mipuble.domain.usecase.CreateCategoryUseCase
@@ -27,6 +29,7 @@ import com.mipuble.domain.usecase.SaveCustomOrderUseCase
 import com.mipuble.domain.usecase.SyncRemoteLibraryUseCase
 import com.mipuble.domain.usecase.UpdateCategoryUseCase
 import com.mipuble.domain.usecase.UploadBooksToDriveUseCase
+import com.mipuble.domain.usecase.UploadFolderToDriveUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -67,6 +70,7 @@ class LibraryViewModel @Inject constructor(
     observeUploads: ObserveUploadsUseCase,
     private val importEpub: ImportEpubUseCase,
     private val uploadBooks: UploadBooksToDriveUseCase,
+    private val uploadFolder: UploadFolderToDriveUseCase,
     private val createCategory: CreateCategoryUseCase,
     private val updateCategory: UpdateCategoryUseCase,
     private val deleteCategory: DeleteCategoryUseCase,
@@ -141,7 +145,14 @@ class LibraryViewModel @Inject constructor(
     fun onImport(uriString: String) {
         viewModelScope.launch {
             importEpub(uriString)
-                .onSuccess { _messages.update { "Book added to your library." } }
+                .onSuccess { outcome ->
+                    _messages.update {
+                        when (outcome) {
+                            is ImportOutcome.Added -> "Book added to your library."
+                            ImportOutcome.Duplicate -> "Already in your library — skipped."
+                        }
+                    }
+                }
                 .onFailure { _messages.update { "Couldn't import that file — is it a valid EPUB?" } }
         }
     }
@@ -228,19 +239,34 @@ class LibraryViewModel @Inject constructor(
 
     fun onUploadBooks(uriStrings: List<String>) {
         if (uriStrings.isEmpty()) return
-        viewModelScope.launch {
-            uploadBooks(uriStrings)
-                .onSuccess { count -> _messages.update { "Uploaded $count book(s) to Drive." } }
-                .onFailure { e ->
-                    val consent = e as? NeedConsentException ?: e.cause as? NeedConsentException
-                    if (consent != null) {
-                        pendingConsent.value = consent.intent
-                        _messages.update { "Grant Drive access, then upload again." }
-                    } else {
-                        _messages.update { e.message ?: "Upload failed." }
+        viewModelScope.launch { runUpload { uploadBooks(uriStrings) } }
+    }
+
+    fun onUploadFolder(treeUriString: String) {
+        viewModelScope.launch { runUpload { uploadFolder(treeUriString) } }
+    }
+
+    private suspend fun runUpload(block: suspend () -> Result<UploadSummary>) {
+        block()
+            .onSuccess { summary ->
+                _messages.update {
+                    when {
+                        summary.total == 0 -> "No EPUBs found to upload."
+                        summary.skipped == 0 -> "Uploaded ${summary.added} book(s) to Drive."
+                        summary.added == 0 -> "All ${summary.skipped} already in Drive — skipped."
+                        else -> "Uploaded ${summary.added}, skipped ${summary.skipped} duplicate(s)."
                     }
                 }
-        }
+            }
+            .onFailure { e ->
+                val consent = e as? NeedConsentException ?: e.cause as? NeedConsentException
+                if (consent != null) {
+                    pendingConsent.value = consent.intent
+                    _messages.update { "Grant Drive access, then upload again." }
+                } else {
+                    _messages.update { e.message ?: "Upload failed." }
+                }
+            }
     }
 
     fun onDownload(bookId: Long) {

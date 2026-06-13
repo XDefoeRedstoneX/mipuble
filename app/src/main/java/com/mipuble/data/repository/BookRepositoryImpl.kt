@@ -4,6 +4,7 @@ import com.mipuble.data.epub.EpubImporter
 import com.mipuble.data.local.BookDao
 import com.mipuble.data.local.toDomain
 import com.mipuble.domain.model.Book
+import com.mipuble.domain.model.ImportOutcome
 import com.mipuble.domain.repository.BookRepository
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -24,7 +25,7 @@ class BookRepositoryImpl @Inject constructor(
     override suspend fun updateReadingPosition(id: Long, chapter: Int, progress: Float) =
         bookDao.updatePosition(id, chapter, progress)
 
-    override suspend fun importBook(uriString: String): Result<Long> =
+    override suspend fun importBook(uriString: String): Result<ImportOutcome> =
         importer.import(uriString)
 
     override suspend fun setBookCategory(bookId: Long, categoryId: Long?) =

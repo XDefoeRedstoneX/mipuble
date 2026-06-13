@@ -3,6 +3,7 @@ package com.mipuble.data.repository
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
+import androidx.documentfile.provider.DocumentFile
 import com.mipuble.data.epub.EpubImporter
 import com.mipuble.data.local.BookDao
 import com.mipuble.data.local.BookEntity
@@ -12,6 +13,7 @@ import com.mipuble.data.remote.NeedConsentException
 import com.mipuble.data.remote.RemoteLibrarySource
 import com.mipuble.domain.model.DownloadStatus
 import com.mipuble.domain.model.UploadProgress
+import com.mipuble.domain.model.UploadSummary
 import com.mipuble.domain.repository.RemoteLibraryRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -126,24 +128,63 @@ class RemoteLibraryRepositoryImpl @Inject constructor(
             }
         }
 
-    override suspend fun uploadBooks(uriStrings: List<String>): Result<Int> =
+    override suspend fun uploadBooks(uriStrings: List<String>): Result<UploadSummary> =
         withContext(Dispatchers.IO) {
-            runCatching {
-                if (!source.isAvailable()) error("Not signed in to Drive")
-                var uploaded = 0
-                uriStrings.forEachIndexed { index, uriString ->
-                    val name = displayName(uriString)
-                    _uploads.value = UploadProgress(index + 1, uriStrings.size, name, 0f)
-                    val local = copyUriToStorage(uriString)
-                    val remote = source.uploadBook(local, name) { fraction ->
-                        _uploads.value = UploadProgress(index + 1, uriStrings.size, name, fraction)
-                    }
-                    importer.register(local, remoteId = remote.remoteId, remoteSize = remote.sizeBytes)
-                    uploaded++
-                }
-                uploaded
-            }.also { _uploads.value = null }
+            runCatching { uploadAll(uriStrings) }.also { _uploads.value = null }
         }
+
+    override suspend fun uploadFolder(treeUriString: String): Result<UploadSummary> =
+        withContext(Dispatchers.IO) {
+            runCatching { uploadAll(scanFolderForEpubs(treeUriString)) }
+                .also { _uploads.value = null }
+        }
+
+    /** Shared upload loop with duplicate-skipping; used by file- and folder-pick. */
+    private suspend fun uploadAll(uriStrings: List<String>): UploadSummary {
+        if (!source.isAvailable()) error("Not signed in to Drive")
+        // Names already in the Drive folder, to skip re-uploading metadata-only books.
+        val remoteTitles = source.listBooks().map { it.title }.toSet()
+
+        var added = 0
+        var skipped = 0
+        uriStrings.forEachIndexed { index, uriString ->
+            val name = displayName(uriString)
+            _uploads.value = UploadProgress(index + 1, uriStrings.size, name, 0f)
+            val local = copyUriToStorage(uriString)
+
+            val duplicate = importer.isDuplicate(local) ||
+                name.removeSuffix(".epub") in remoteTitles
+            if (duplicate) {
+                local.delete()
+                skipped++
+                return@forEachIndexed
+            }
+
+            val remote = source.uploadBook(local, name) { fraction ->
+                _uploads.value = UploadProgress(index + 1, uriStrings.size, name, fraction)
+            }
+            importer.register(local, remoteId = remote.remoteId, remoteSize = remote.sizeBytes)
+            added++
+        }
+        return UploadSummary(added = added, skipped = skipped)
+    }
+
+    /** Recursively collects content-Uri strings of every EPUB under a tree Uri. */
+    private fun scanFolderForEpubs(treeUriString: String): List<String> {
+        val root = DocumentFile.fromTreeUri(context, Uri.parse(treeUriString)) ?: return emptyList()
+        val found = mutableListOf<String>()
+        fun walk(dir: DocumentFile) {
+            dir.listFiles().forEach { entry ->
+                when {
+                    entry.isDirectory -> walk(entry)
+                    entry.name?.endsWith(".epub", ignoreCase = true) == true ||
+                        entry.type == "application/epub+zip" -> found += entry.uri.toString()
+                }
+            }
+        }
+        walk(root)
+        return found
+    }
 
     override suspend fun resetToDrive(uploadLocalFirst: Boolean): Result<Int> =
         withContext(Dispatchers.IO) {

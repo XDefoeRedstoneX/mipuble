@@ -39,7 +39,8 @@ class ObserveLibraryUseCaseTest {
         override fun observeBooks(): Flow<List<Book>> = flowOf(books)
         override suspend fun getBook(id: Long): Book? = books.firstOrNull { it.id == id }
         override suspend fun updateReadingPosition(id: Long, chapter: Int, progress: Float) = Unit
-        override suspend fun importBook(uriString: String): Result<Long> = Result.success(0L)
+        override suspend fun importBook(uriString: String): Result<com.mipuble.domain.model.ImportOutcome> =
+            Result.success(com.mipuble.domain.model.ImportOutcome.Added(0L))
         override suspend fun setBookCategory(bookId: Long, categoryId: Long?) = Unit
         override suspend fun saveCustomOrder(orderedBookIds: List<Long>) = Unit
     }

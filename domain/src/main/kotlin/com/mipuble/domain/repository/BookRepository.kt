@@ -1,6 +1,7 @@
 package com.mipuble.domain.repository
 
 import com.mipuble.domain.model.Book
+import com.mipuble.domain.model.ImportOutcome
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -19,9 +20,9 @@ interface BookRepository {
 
     /**
      * Imports an EPUB from a content Uri (passed as a String so the domain
-     * stays free of Android types). Returns the new book's id.
+     * stays free of Android types). Duplicates are auto-skipped.
      */
-    suspend fun importBook(uriString: String): Result<Long>
+    suspend fun importBook(uriString: String): Result<ImportOutcome>
 
     /** Assigns the book to a category, or clears it with null. */
     suspend fun setBookCategory(bookId: Long, categoryId: Long?)
