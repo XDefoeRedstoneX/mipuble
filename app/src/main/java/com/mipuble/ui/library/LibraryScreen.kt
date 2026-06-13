@@ -134,9 +134,15 @@ fun LibraryScreen(
 
     LaunchedEffect(uiState.pendingConsent) {
         val consent = uiState.pendingConsent
+        android.util.Log.i("MipubleDrive", "LaunchedEffect fired, pendingConsent != null = ${consent != null}")
         if (consent != null) {
             try {
+                android.util.Log.i("MipubleDrive", "launching consent intent")
                 authLauncher.launch(IntentSenderRequest.Builder(consent).build())
+                android.util.Log.i("MipubleDrive", "launch() returned without throwing")
+            } catch (e: Exception) {
+                android.util.Log.e("MipubleDrive", "launch() threw", e)
+                viewModel.onConsentLaunchFailed(e.message)
             } finally {
                 viewModel.onConsentShown()
             }

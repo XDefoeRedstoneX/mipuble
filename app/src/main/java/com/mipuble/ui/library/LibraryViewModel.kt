@@ -173,7 +173,12 @@ class LibraryViewModel @Inject constructor(
                     }
                 }
                 .onFailure { e ->
+                    android.util.Log.i(
+                        "MipubleDrive",
+                        "onSync failure type=${e.javaClass.name} msg=${e.message} isNeedConsent=${e is NeedConsentException}",
+                    )
                     if (e is NeedConsentException) {
+                        android.util.Log.i("MipubleDrive", "setting pendingConsent intent=${e.intent}")
                         pendingConsent.value = e.intent
                     } else {
                         // Fallback: check if it's wrapped or has the specific message
@@ -213,6 +218,11 @@ class LibraryViewModel @Inject constructor(
     /** The consent screen returned without RESULT_OK (cancelled or blocked). */
     fun onConsentCanceled(resultCode: Int) {
         _messages.update { "Consent screen closed without granting (code $resultCode)." }
+    }
+
+    /** Launching the consent PendingIntent itself failed. */
+    fun onConsentLaunchFailed(message: String?) {
+        _messages.update { "Couldn't open the Google consent screen: ${message ?: "unknown error"}" }
     }
 
     fun onDownload(bookId: Long) {
