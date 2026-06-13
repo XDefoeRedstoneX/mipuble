@@ -1,7 +1,9 @@
 package com.mipuble.ui.library
 
+import android.app.PendingIntent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mipuble.data.remote.NeedConsentException
 import com.mipuble.domain.model.Book
 import com.mipuble.domain.model.Category
 import com.mipuble.domain.model.DownloadStatus
@@ -38,6 +40,7 @@ data class LibraryUiState(
     val selectedCategoryId: Long? = null,
     val downloads: Map<Long, DownloadStatus> = emptyMap(),
     val isSyncing: Boolean = false,
+    val pendingConsent: PendingIntent? = null,
 ) {
     /**
      * Drag-and-drop only makes sense when looking at the full library in the
@@ -67,6 +70,7 @@ class LibraryViewModel @Inject constructor(
     private val sortOption = MutableStateFlow(BookSortOption.TITLE_NATURAL)
     private val selectedCategoryId = MutableStateFlow<Long?>(null)
     private val isSyncing = MutableStateFlow(false)
+    private val pendingConsent = MutableStateFlow<PendingIntent?>(null)
 
     /** One-off user-facing messages (import/sync results, unavailable books). */
     private val _messages = MutableStateFlow<String?>(null)
@@ -89,7 +93,8 @@ class LibraryViewModel @Inject constructor(
             libraryAndCategories,
             observeDownloads(),
             isSyncing,
-        ) { (sort, category, data), downloads, syncing ->
+            pendingConsent,
+        ) { (sort, category, data), downloads, syncing, consent ->
             val (books, categories) = data
             LibraryUiState(
                 isLoading = false,
@@ -99,6 +104,7 @@ class LibraryViewModel @Inject constructor(
                 selectedCategoryId = category,
                 downloads = downloads,
                 isSyncing = syncing,
+                pendingConsent = consent,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -162,9 +168,28 @@ class LibraryViewModel @Inject constructor(
                         if (added > 0) "Synced — $added new book(s) available." else "Library is up to date."
                     }
                 }
-                .onFailure { e -> _messages.update { e.message ?: "Sync failed." } }
+                .onFailure { e ->
+                    if (e is NeedConsentException) {
+                        pendingConsent.value = e.intent
+                    } else {
+                        // Fallback: check if it's wrapped or has the specific message
+                        val consentException = e.cause as? NeedConsentException
+                        if (consentException != null) {
+                            pendingConsent.value = consentException.intent
+                        } else if (e.message == "Consent required") {
+                            // This shouldn't happen if types match, but helps diagnostics
+                            _messages.update { "Please grant permissions to access Google Drive." }
+                        } else {
+                            _messages.update { e.message ?: "Sync failed." }
+                        }
+                    }
+                }
             isSyncing.value = false
         }
+    }
+
+    fun onConsentShown() {
+        pendingConsent.value = null
     }
 
     fun onDownload(bookId: Long) {

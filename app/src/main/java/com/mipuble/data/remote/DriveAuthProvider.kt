@@ -1,16 +1,26 @@
 package com.mipuble.data.remote
 
+import android.app.PendingIntent
+
 /**
- * Supplies a Google OAuth access token with Drive read scope. The concrete
- * implementation would obtain this via Credential Manager / Google Sign-In and
- * an OAuth client id configured in a Google Cloud project — the one piece that
- * needs real credentials. Returning null means "not signed in".
+ * Result of an authentication attempt.
  */
-interface DriveAuthProvider {
-    suspend fun accessToken(): String?
+sealed interface AuthResult {
+    data class Success(val token: String) : AuthResult
+    data class ConsentRequired(val intent: PendingIntent) : AuthResult
+    data object Error : AuthResult
 }
 
-/** Default no-credentials provider; the app uses the fake source until this is wired. */
-class UnconfiguredDriveAuthProvider : DriveAuthProvider {
-    override suspend fun accessToken(): String? = null
+/**
+ * Supplies a Google OAuth access token with Drive read scope.
+ */
+interface DriveAuthProvider {
+    suspend fun authenticate(): AuthResult
 }
+
+/** Default no-credentials provider. */
+class UnconfiguredDriveAuthProvider : DriveAuthProvider {
+    override suspend fun authenticate(): AuthResult = AuthResult.Error
+}
+
+class NeedConsentException(val intent: PendingIntent) : Exception("Consent required")

@@ -1,6 +1,8 @@
 package com.mipuble.ui.library
 
+import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -116,6 +118,25 @@ fun LibraryScreen(
     val picker = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri -> uri?.let { viewModel.onImport(it.toString()) } }
+
+    val authLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            viewModel.onSync()
+        }
+    }
+
+    LaunchedEffect(uiState.pendingConsent) {
+        val consent = uiState.pendingConsent
+        if (consent != null) {
+            try {
+                authLauncher.launch(IntentSenderRequest.Builder(consent).build())
+            } finally {
+                viewModel.onConsentShown()
+            }
+        }
+    }
 
     var assigningBook by remember { mutableStateOf<Book?>(null) }
     var editingCategory by remember { mutableStateOf<Category?>(null) }

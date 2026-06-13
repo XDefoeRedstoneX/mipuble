@@ -1,8 +1,12 @@
 package com.mipuble.data.repository
 
+import android.app.PendingIntent
 import android.content.Context
 import com.mipuble.data.local.BookDao
 import com.mipuble.data.local.BookEntity
+import com.mipuble.data.remote.AuthResult
+import com.mipuble.data.remote.DriveAuthProvider
+import com.mipuble.data.remote.NeedConsentException
 import com.mipuble.data.remote.RemoteLibrarySource
 import com.mipuble.domain.model.DownloadStatus
 import com.mipuble.domain.repository.RemoteLibraryRepository
@@ -20,6 +24,7 @@ import kotlinx.coroutines.withContext
 class RemoteLibraryRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val source: RemoteLibrarySource,
+    private val authProvider: DriveAuthProvider,
     private val bookDao: BookDao,
 ) : RemoteLibraryRepository {
 
@@ -30,7 +35,12 @@ class RemoteLibraryRepositoryImpl @Inject constructor(
 
     override suspend fun sync(): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {
-            if (!source.isAvailable()) error("Remote library isn't available.")
+            val auth = authProvider.authenticate()
+            when (auth) {
+                is AuthResult.ConsentRequired -> throw NeedConsentException(auth.intent)
+                is AuthResult.Error -> error("Authentication failed")
+                is AuthResult.Success -> { /* proceed */ }
+            }
 
             val known = bookDao.remoteIds().toSet()
             val newBooks = source.listBooks().filter { it.remoteId !in known }

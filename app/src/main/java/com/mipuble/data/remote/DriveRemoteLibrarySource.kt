@@ -21,10 +21,12 @@ class DriveRemoteLibrarySource @Inject constructor(
     private val authProvider: DriveAuthProvider,
 ) : RemoteLibrarySource {
 
-    override suspend fun isAvailable(): Boolean = authProvider.accessToken() != null
+    override suspend fun isAvailable(): Boolean = authProvider.authenticate() is AuthResult.Success
 
     override suspend fun listBooks(): List<RemoteBook> {
-        val token = authProvider.accessToken() ?: return emptyList()
+        val auth = authProvider.authenticate()
+        if (auth !is AuthResult.Success) return emptyList()
+        val token = auth.token
         val url = "$BASE/files?q=${"mimeType='application/epub+zip' and trashed=false".encode()}" +
             "&fields=files(id,name,size)&pageSize=200"
         val request = Request.Builder().url(url).header("Authorization", "Bearer $token").build()
@@ -42,7 +44,9 @@ class DriveRemoteLibrarySource @Inject constructor(
     }
 
     override suspend fun download(remoteId: String, target: File, onProgress: (Float) -> Unit) {
-        val token = authProvider.accessToken() ?: error("Not signed in to Drive")
+        val auth = authProvider.authenticate()
+        if (auth !is AuthResult.Success) error("Not signed in to Drive")
+        val token = auth.token
         val request = Request.Builder()
             .url("$BASE/files/$remoteId?alt=media")
             .header("Authorization", "Bearer $token")

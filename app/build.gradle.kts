@@ -74,6 +74,11 @@ dependencies {
 
     implementation(libs.okhttp)
 
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services)
+    implementation(libs.googleid)
+    implementation(libs.play.services.auth)
+
     debugImplementation(libs.androidx.ui.tooling)
 
     testImplementation(libs.junit)
