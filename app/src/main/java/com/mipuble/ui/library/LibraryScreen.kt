@@ -122,8 +122,10 @@ fun LibraryScreen(
     val authLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
+        // Read the granted token from the returned data rather than starting a
+        // fresh authorize() — the latter re-prompted and looped.
         if (result.resultCode == Activity.RESULT_OK) {
-            viewModel.onSync()
+            viewModel.onConsentResult(result.data)
         }
     }
 

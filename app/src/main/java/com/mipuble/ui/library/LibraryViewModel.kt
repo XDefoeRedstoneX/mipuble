@@ -1,8 +1,11 @@
 package com.mipuble.ui.library
 
 import android.app.PendingIntent
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mipuble.data.remote.AuthResult
+import com.mipuble.data.remote.DriveAuthProvider
 import com.mipuble.data.remote.NeedConsentException
 import com.mipuble.domain.model.Book
 import com.mipuble.domain.model.Category
@@ -65,6 +68,7 @@ class LibraryViewModel @Inject constructor(
     private val syncRemoteLibrary: SyncRemoteLibraryUseCase,
     private val downloadBook: DownloadBookUseCase,
     private val evictBook: EvictBookUseCase,
+    private val driveAuthProvider: DriveAuthProvider,
 ) : ViewModel() {
 
     private val sortOption = MutableStateFlow(BookSortOption.TITLE_NATURAL)
@@ -190,6 +194,20 @@ class LibraryViewModel @Inject constructor(
 
     fun onConsentShown() {
         pendingConsent.value = null
+    }
+
+    /**
+     * Called with the consent Activity's result. We read the granted token
+     * straight from the returned Intent (instead of re-authorizing blind, which
+     * looped), cache it in the provider, then sync — which now succeeds.
+     */
+    fun onConsentResult(data: Intent?) {
+        viewModelScope.launch {
+            when (driveAuthProvider.completeConsent(data)) {
+                is AuthResult.Success -> onSync()
+                else -> _messages.update { "Google Drive permission wasn't granted." }
+            }
+        }
     }
 
     fun onDownload(bookId: Long) {

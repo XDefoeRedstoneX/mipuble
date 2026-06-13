@@ -1,6 +1,7 @@
 package com.mipuble.ui.library
 
 import com.mipuble.MainDispatcherRule
+import com.mipuble.data.remote.UnconfiguredDriveAuthProvider
 import com.mipuble.domain.model.Book
 import com.mipuble.domain.model.Category
 import com.mipuble.domain.model.DownloadStatus
@@ -102,6 +103,7 @@ class LibraryViewModelTest {
             syncRemoteLibrary = SyncRemoteLibraryUseCase(remoteRepository),
             downloadBook = DownloadBookUseCase(remoteRepository),
             evictBook = EvictBookUseCase(remoteRepository),
+            driveAuthProvider = UnconfiguredDriveAuthProvider(),
         )
     }
 
