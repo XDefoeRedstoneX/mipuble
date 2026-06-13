@@ -173,24 +173,11 @@ class LibraryViewModel @Inject constructor(
                     }
                 }
                 .onFailure { e ->
-                    android.util.Log.i(
-                        "MipubleDrive",
-                        "onSync failure type=${e.javaClass.name} msg=${e.message} isNeedConsent=${e is NeedConsentException}",
-                    )
-                    if (e is NeedConsentException) {
-                        android.util.Log.i("MipubleDrive", "setting pendingConsent intent=${e.intent}")
-                        pendingConsent.value = e.intent
+                    val consent = e as? NeedConsentException ?: e.cause as? NeedConsentException
+                    if (consent != null) {
+                        pendingConsent.value = consent.intent
                     } else {
-                        // Fallback: check if it's wrapped or has the specific message
-                        val consentException = e.cause as? NeedConsentException
-                        if (consentException != null) {
-                            pendingConsent.value = consentException.intent
-                        } else if (e.message == "Consent required") {
-                            // This shouldn't happen if types match, but helps diagnostics
-                            _messages.update { "Please grant permissions to access Google Drive." }
-                        } else {
-                            _messages.update { e.message ?: "Sync failed." }
-                        }
+                        _messages.update { e.message ?: "Sync failed." }
                     }
                 }
             isSyncing.value = false

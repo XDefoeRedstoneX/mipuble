@@ -157,16 +157,30 @@ internal fun StepperRow(
 @Composable
 internal fun FontPickerRow(selected: ReaderFont, onSelect: (ReaderFont) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
+    val selectedFamily = rememberReaderFontFamily(selected)
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("Font", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
         OutlinedButton(onClick = { expanded = true }) {
-            Text(selected.displayName)
+            // Show the choice IN its own typeface, not just its name.
+            Text(selected.displayName, fontFamily = selectedFamily)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             ReaderFont.entries.forEach { font ->
+                val family = rememberReaderFontFamily(font)
                 DropdownMenuItem(
-                    text = { Text(font.displayName) },
+                    text = {
+                        Text(
+                            text = font.displayName,
+                            fontFamily = family,
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    },
+                    trailingIcon = {
+                        if (font == selected) {
+                            Text("✓", style = MaterialTheme.typography.titleMedium)
+                        }
+                    },
                     onClick = {
                         expanded = false
                         onSelect(font)

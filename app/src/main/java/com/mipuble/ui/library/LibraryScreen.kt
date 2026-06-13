@@ -124,7 +124,6 @@ fun LibraryScreen(
     ) { result ->
         // Read the granted token from the returned data rather than starting a
         // fresh authorize() — the latter re-prompted and looped.
-        android.util.Log.i("MipubleDrive", "consent activity returned resultCode=${result.resultCode}")
         if (result.resultCode == Activity.RESULT_OK) {
             viewModel.onConsentResult(result.data)
         } else {
@@ -134,14 +133,10 @@ fun LibraryScreen(
 
     LaunchedEffect(uiState.pendingConsent) {
         val consent = uiState.pendingConsent
-        android.util.Log.i("MipubleDrive", "LaunchedEffect fired, pendingConsent != null = ${consent != null}")
         if (consent != null) {
             try {
-                android.util.Log.i("MipubleDrive", "launching consent intent")
                 authLauncher.launch(IntentSenderRequest.Builder(consent).build())
-                android.util.Log.i("MipubleDrive", "launch() returned without throwing")
             } catch (e: Exception) {
-                android.util.Log.e("MipubleDrive", "launch() threw", e)
                 viewModel.onConsentLaunchFailed(e.message)
             } finally {
                 viewModel.onConsentShown()

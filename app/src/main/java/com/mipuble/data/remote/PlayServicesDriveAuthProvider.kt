@@ -2,7 +2,6 @@ package com.mipuble.data.remote
 
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.AuthorizationResult
 import com.google.android.gms.auth.api.identity.Identity
@@ -17,8 +16,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
 /**
  * Real Google Drive auth via the Play Services Authorization API.
  *
- * Diagnostic logging is under the tag "MipubleDrive" so the consent flow can be
- * traced from Logcat without a debugger.
+ * Requests two scopes: drive.readonly (list/download everything in the mipuble
+ * folder, including web-added files) and drive.file (create the folder and
+ * upload). drive.file is non-sensitive, so it adds no verification burden.
  */
 @Singleton
 class PlayServicesDriveAuthProvider @Inject constructor(
@@ -32,40 +32,26 @@ class PlayServicesDriveAuthProvider @Inject constructor(
 
     private val request: AuthorizationRequest =
         AuthorizationRequest.builder()
-            .setRequestedScopes(listOf(Scope("https://www.googleapis.com/auth/drive.readonly")))
+            .setRequestedScopes(
+                listOf(
+                    Scope("https://www.googleapis.com/auth/drive.readonly"),
+                    Scope("https://www.googleapis.com/auth/drive.file"),
+                ),
+            )
             .build()
 
     override suspend fun authenticate(): AuthResult {
-        cachedToken?.let {
-            Log.i(TAG, "authenticate(): using cached token")
-            return AuthResult.Success(it)
-        }
+        cachedToken?.let { return AuthResult.Success(it) }
         return suspendCancellableCoroutine { cont ->
             authorizationClient.authorize(request)
-                .addOnSuccessListener {
-                    Log.i(
-                        TAG,
-                        "authorize() ok: hasResolution=${it.hasResolution()} hasToken=${it.accessToken != null}",
-                    )
-                    cont.resume(it.toAuthResult())
-                }
-                .addOnFailureListener { e ->
-                    val code = (e as? ApiException)?.statusCode
-                    Log.e(TAG, "authorize() FAILED statusCode=$code", e)
-                    cont.resume(AuthResult.Error)
-                }
+                .addOnSuccessListener { cont.resume(it.toAuthResult()) }
+                .addOnFailureListener { cont.resume(AuthResult.Error) }
         }
     }
 
     override suspend fun completeConsent(data: Intent?): AuthResult = try {
-        val result = authorizationClient.getAuthorizationResultFromIntent(data)
-        Log.i(
-            TAG,
-            "completeConsent(): hasResolution=${result.hasResolution()} hasToken=${result.accessToken != null}",
-        )
-        result.toAuthResult()
+        authorizationClient.getAuthorizationResultFromIntent(data).toAuthResult()
     } catch (e: ApiException) {
-        Log.e(TAG, "completeConsent() FAILED statusCode=${e.statusCode}", e)
         AuthResult.Error
     }
 
@@ -76,9 +62,5 @@ class PlayServicesDriveAuthProvider @Inject constructor(
             AuthResult.Success(accessToken!!)
         }
         else -> AuthResult.Error
-    }
-
-    private companion object {
-        const val TAG = "MipubleDrive"
     }
 }
