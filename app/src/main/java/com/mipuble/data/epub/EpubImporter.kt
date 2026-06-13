@@ -5,6 +5,7 @@ import android.net.Uri
 import com.mipuble.data.local.BookDao
 import com.mipuble.data.local.BookEntity
 import com.mipuble.domain.model.ImportOutcome
+import com.mipuble.domain.title.TitleNormalizer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.security.MessageDigest
@@ -16,9 +17,10 @@ import kotlinx.coroutines.withContext
 
 /**
  * Brings an EPUB into the library: copies the file into app-private storage,
- * parses its metadata, extracts the cover, and records a [BookEntity] pointing
- * at the stored file. The book's bytes live on disk exactly once; the reader
- * streams chapters straight from this copy.
+ * parses its metadata, cleans up its title, extracts the cover, and records a
+ * [BookEntity]. Duplicate detection is two-pronged: exact bytes (content hash)
+ * and a logical series|volume key, so a re-release of the same volume is caught
+ * even when its bytes differ.
  */
 @Singleton
 class EpubImporter @Inject constructor(
@@ -26,6 +28,33 @@ class EpubImporter @Inject constructor(
     private val parser: EpubParser,
     private val bookDao: BookDao,
 ) {
+
+    /** Identity of an EPUB file: exact hash, cleaned title, and logical key. */
+    data class Identity(
+        val contentHash: String,
+        val displayTitle: String,
+        val author: String,
+        val dedupKey: String?,
+    )
+
+    /** Computes a file's identity, preferring the EPUB's own title over the filename. */
+    fun identify(file: File, fallbackName: String): Identity {
+        val epub = runCatching { parser.parse(file) }.getOrNull()
+        val rawTitle = epub?.title?.takeIf { it.isNotBlank() }
+            ?: fallbackName.substringAfterLast('/').ifBlank { file.nameWithoutExtension }
+        val normalized = TitleNormalizer.normalize(rawTitle)
+        return Identity(
+            contentHash = sha256(file),
+            displayTitle = normalized.displayTitle,
+            author = epub?.author?.takeIf { it.isNotBlank() } ?: "Unknown",
+            dedupKey = normalized.dedupKey,
+        )
+    }
+
+    /** True if an EPUB with these bytes, or this series|volume, is already present. */
+    suspend fun isDuplicate(identity: Identity): Boolean =
+        bookDao.findByHash(identity.contentHash) != null ||
+            (identity.dedupKey != null && bookDao.findByDedupKey(identity.dedupKey) != null)
 
     /** Imports from a SAF content Uri chosen by the user; auto-skips duplicates. */
     suspend fun import(uriString: String): Result<ImportOutcome> = withContext(Dispatchers.IO) {
@@ -36,18 +65,15 @@ class EpubImporter @Inject constructor(
                 target.outputStream().use { input.copyTo(it) }
             } ?: error("Could not open $uriString")
 
-            val hash = sha256(target)
-            if (bookDao.findByHash(hash) != null) {
+            val identity = identify(target, fallbackName = uri.lastPathSegment.orEmpty())
+            if (isDuplicate(identity)) {
                 target.delete()
                 ImportOutcome.Duplicate
             } else {
-                ImportOutcome.Added(finishImport(target, contentHash = hash))
+                ImportOutcome.Added(finishImport(target, identity))
             }
         }
     }
-
-    /** True if a book with the same bytes is already in the library. */
-    suspend fun isDuplicate(file: File): Boolean = bookDao.findByHash(sha256(file)) != null
 
     /** Imports a sample book bundled in assets; used to seed the demo library. */
     suspend fun importFromAsset(assetName: String): Result<Long> = withContext(Dispatchers.IO) {
@@ -58,15 +84,8 @@ class EpubImporter @Inject constructor(
                     target.outputStream().use { input.copyTo(it) }
                 }
             }
-            finishImport(target)
+            finishImport(target, identify(target, fallbackName = assetName))
         }
-    }
-
-    /** Copies an arbitrary file into book storage; used by the Drive uploader. */
-    fun copyIntoStorage(source: File): File {
-        val target = File(booksDir(), "${UUID.randomUUID()}.epub")
-        source.inputStream().use { input -> target.outputStream().use { input.copyTo(it) } }
-        return target
     }
 
     /**
@@ -78,30 +97,31 @@ class EpubImporter @Inject constructor(
         file: File,
         remoteId: String? = null,
         remoteSize: Long? = null,
-    ): Long = finishImport(file, remoteId, remoteSize, contentHash = sha256(file))
+    ): Long = finishImport(file, identify(file, fallbackName = file.name), remoteId, remoteSize)
 
     private suspend fun finishImport(
         file: File,
+        identity: Identity,
         remoteId: String? = null,
         remoteSize: Long? = null,
-        contentHash: String? = null,
     ): Long {
-        val epub = parser.parse(file)
+        val epub = runCatching { parser.parse(file) }.getOrNull()
         val id = bookDao.insert(
             BookEntity(
-                title = epub.title.ifBlank { file.nameWithoutExtension },
-                author = epub.author.ifBlank { "Unknown" },
+                title = identity.displayTitle.ifBlank { file.nameWithoutExtension },
+                author = identity.author,
                 addedAt = System.currentTimeMillis(),
                 filePath = file.absolutePath,
                 remoteId = remoteId,
                 remoteSizeBytes = remoteSize,
-                contentHash = contentHash,
+                contentHash = identity.contentHash,
+                dedupKey = identity.dedupKey,
             ),
         )
         // New books join the end of the hand-arranged order (ids are monotonic).
         bookDao.updateCustomOrder(id, id)
 
-        epub.coverImageHref?.let { href ->
+        epub?.coverImageHref?.let { href ->
             val bytes = EpubResourceReader(file).use { it.read(href) }
             if (bytes != null) {
                 val coverFile = File(coversDir(), "$id.${href.substringAfterLast('.', "img")}")

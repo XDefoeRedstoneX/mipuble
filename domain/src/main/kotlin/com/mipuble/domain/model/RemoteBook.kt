@@ -15,10 +15,12 @@ data class RemoteBook(
     val sizeBytes: Long,
 )
 
-/** Progress of an in-flight upload batch; null when idle. */
+/** Progress of an in-flight upload batch (or a folder scan); null when idle. */
 data class UploadProgress(
     val currentIndex: Int,
     val total: Int,
     val fileName: String,
     val fraction: Float,
+    /** True while a picked folder is being scanned, before any upload starts. */
+    val scanning: Boolean = false,
 )

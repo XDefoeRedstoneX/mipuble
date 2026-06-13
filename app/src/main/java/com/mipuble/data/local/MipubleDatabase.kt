@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [BookEntity::class, CategoryEntity::class],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class MipubleDatabase : RoomDatabase() {
@@ -53,6 +53,13 @@ abstract class MipubleDatabase : RoomDatabase() {
         val MIGRATION_4_5 = object : Migration(4, 5) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE books ADD COLUMN content_hash TEXT")
+            }
+        }
+
+        /** Adds the normalized series|volume dedup key. */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE books ADD COLUMN dedup_key TEXT")
             }
         }
     }

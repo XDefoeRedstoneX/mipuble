@@ -39,6 +39,9 @@ interface BookDao {
     @Query("SELECT * FROM books WHERE content_hash = :hash LIMIT 1")
     suspend fun findByHash(hash: String): BookEntity?
 
+    @Query("SELECT * FROM books WHERE dedup_key = :key LIMIT 1")
+    suspend fun findByDedupKey(key: String): BookEntity?
+
     @Query("UPDATE books SET file_path = :filePath WHERE id = :id")
     suspend fun updateFilePath(id: Long, filePath: String?)
 

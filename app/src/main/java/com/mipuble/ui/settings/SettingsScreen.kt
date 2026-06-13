@@ -174,12 +174,16 @@ fun SettingsScreen(
             // Live progress for an upload batch or a running reset.
             uiState.upload?.let { up ->
                 Text(
-                    "Uploading ${up.currentIndex}/${up.total}: ${up.fileName}",
+                    if (up.scanning) "Scanning folder…" else "Uploading ${up.currentIndex}/${up.total}: ${up.fileName}",
                     style = MaterialTheme.typography.labelMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                LinearProgressIndicator(progress = { up.fraction }, modifier = Modifier.fillMaxWidth())
+                if (up.scanning) {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                } else {
+                    LinearProgressIndicator(progress = { up.fraction }, modifier = Modifier.fillMaxWidth())
+                }
             }
 
             OutlinedButton(

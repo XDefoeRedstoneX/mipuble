@@ -274,16 +274,25 @@ private fun UploadBanner(progress: UploadProgress) {
             .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Text(
-            "Uploading ${progress.currentIndex}/${progress.total}: ${progress.fileName}",
+            text = if (progress.scanning) {
+                "Scanning folder…"
+            } else {
+                "Uploading ${progress.currentIndex}/${progress.total}: ${progress.fileName}"
+            },
             style = MaterialTheme.typography.labelMedium,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
         Spacer(Modifier.height(4.dp))
-        LinearProgressIndicator(
-            progress = { progress.fraction },
-            modifier = Modifier.fillMaxWidth(),
-        )
+        // Indeterminate bar while scanning; determinate per-file while uploading.
+        if (progress.scanning) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        } else {
+            LinearProgressIndicator(
+                progress = { progress.fraction },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 

@@ -15,6 +15,7 @@ import com.mipuble.domain.model.DownloadStatus
 import com.mipuble.domain.model.UploadProgress
 import com.mipuble.domain.model.UploadSummary
 import com.mipuble.domain.repository.RemoteLibraryRepository
+import com.mipuble.domain.title.TitleNormalizer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
 import java.util.UUID
@@ -135,33 +136,39 @@ class RemoteLibraryRepositoryImpl @Inject constructor(
 
     override suspend fun uploadFolder(treeUriString: String): Result<UploadSummary> =
         withContext(Dispatchers.IO) {
-            runCatching { uploadAll(scanFolderForEpubs(treeUriString)) }
-                .also { _uploads.value = null }
+            runCatching {
+                // Surface a scanning state first — a big tree can take a moment.
+                _uploads.value = UploadProgress(0, 0, "Scanning folder…", 0f, scanning = true)
+                uploadAll(scanFolderForEpubs(treeUriString))
+            }.also { _uploads.value = null }
         }
 
     /** Shared upload loop with duplicate-skipping; used by file- and folder-pick. */
     private suspend fun uploadAll(uriStrings: List<String>): UploadSummary {
         if (!source.isAvailable()) error("Not signed in to Drive")
-        // Names already in the Drive folder, to skip re-uploading metadata-only books.
-        val remoteTitles = source.listBooks().map { it.title }.toSet()
+        // Logical keys already in the Drive folder, to skip re-uploading them.
+        val remoteKeys = source.listBooks()
+            .mapNotNull { TitleNormalizer.normalize(it.title).dedupKey }
+            .toSet()
 
         var added = 0
         var skipped = 0
         uriStrings.forEachIndexed { index, uriString ->
-            val name = displayName(uriString)
-            _uploads.value = UploadProgress(index + 1, uriStrings.size, name, 0f)
             val local = copyUriToStorage(uriString)
+            val identity = importer.identify(local, fallbackName = displayName(uriString))
+            _uploads.value = UploadProgress(index + 1, uriStrings.size, identity.displayTitle, 0f)
 
-            val duplicate = importer.isDuplicate(local) ||
-                name.removeSuffix(".epub") in remoteTitles
+            val duplicate = importer.isDuplicate(identity) ||
+                (identity.dedupKey != null && identity.dedupKey in remoteKeys)
             if (duplicate) {
                 local.delete()
                 skipped++
                 return@forEachIndexed
             }
 
-            val remote = source.uploadBook(local, name) { fraction ->
-                _uploads.value = UploadProgress(index + 1, uriStrings.size, name, fraction)
+            // Upload under the cleaned-up name so the Drive folder stays tidy.
+            val remote = source.uploadBook(local, identity.displayTitle) { fraction ->
+                _uploads.value = UploadProgress(index + 1, uriStrings.size, identity.displayTitle, fraction)
             }
             importer.register(local, remoteId = remote.remoteId, remoteSize = remote.sizeBytes)
             added++
