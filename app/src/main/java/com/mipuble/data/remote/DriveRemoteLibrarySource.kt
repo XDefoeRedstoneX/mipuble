@@ -32,7 +32,8 @@ class DriveRemoteLibrarySource @Inject constructor(
         val request = Request.Builder().url(url).header("Authorization", "Bearer $token").build()
         client.newCall(request).execute().use { response ->
             val body = response.body?.string().orEmpty()
-            if (!response.isSuccessful) error("Drive list failed: ${response.code}")
+            android.util.Log.i("MipubleDrive", "files.list HTTP ${response.code}: ${body.take(300)}")
+            if (!response.isSuccessful) error("Drive list failed: ${response.code} ${body.take(200)}")
             return parseDriveFiles(body)
         }
     }

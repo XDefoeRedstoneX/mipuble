@@ -210,6 +210,11 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
+    /** The consent screen returned without RESULT_OK (cancelled or blocked). */
+    fun onConsentCanceled(resultCode: Int) {
+        _messages.update { "Consent screen closed without granting (code $resultCode)." }
+    }
+
     fun onDownload(bookId: Long) {
         viewModelScope.launch {
             downloadBook(bookId).onFailure { _messages.update { "Download failed." } }

@@ -124,8 +124,11 @@ fun LibraryScreen(
     ) { result ->
         // Read the granted token from the returned data rather than starting a
         // fresh authorize() — the latter re-prompted and looped.
+        android.util.Log.i("MipubleDrive", "consent activity returned resultCode=${result.resultCode}")
         if (result.resultCode == Activity.RESULT_OK) {
             viewModel.onConsentResult(result.data)
+        } else {
+            viewModel.onConsentCanceled(result.resultCode)
         }
     }
 
