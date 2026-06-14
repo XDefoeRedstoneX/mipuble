@@ -247,14 +247,25 @@ class RemoteLibraryRepositoryImpl @Inject constructor(
                 // Upload device-only books first so the reset loses nothing.
                 if (uploadLocalFirst) {
                     val localOnly = bookDao.getAll().filter { it.remoteId == null && it.filePath != null }
+                    // Books already in the folder (by logical key), to link instead
+                    // of re-uploading and creating Drive duplicates.
+                    val remoteByKey = source.listBooks()
+                        .mapNotNull { TitleNormalizer.normalize(it.title).dedupKey?.let { k -> k to it } }
+                        .toMap()
                     localOnly.forEachIndexed { index, book ->
                         _uploads.value = UploadProgress(index + 1, localOnly.size, book.title, 0f)
-                        val file = File(book.filePath!!)
-                        val remote = source.uploadBook(file, book.title) { fraction ->
-                            _uploads.value = UploadProgress(index + 1, localOnly.size, book.title, fraction)
+                        val key = TitleNormalizer.normalize(book.title).dedupKey
+                        val existing = key?.let { remoteByKey[it] }
+                        if (existing != null) {
+                            // Already in Drive — link this row to it, don't re-upload.
+                            bookDao.setRemote(book.id, existing.remoteId, existing.sizeBytes)
+                        } else {
+                            val file = File(book.filePath!!)
+                            val remote = source.uploadBook(file, book.title) { fraction ->
+                                _uploads.value = UploadProgress(index + 1, localOnly.size, book.title, fraction)
+                            }
+                            bookDao.setRemote(book.id, remote.remoteId, remote.sizeBytes)
                         }
-                        // Promote the existing row to a remote-backed one in place.
-                        bookDao.setRemote(book.id, remote.remoteId, remote.sizeBytes)
                     }
                     _uploads.value = null
                 }

@@ -8,7 +8,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 @Database(
     entities = [BookEntity::class, CategoryEntity::class],
     version = 6,
-    exportSchema = false,
+    exportSchema = true,
 )
 abstract class MipubleDatabase : RoomDatabase() {
     abstract fun bookDao(): BookDao

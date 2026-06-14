@@ -92,6 +92,22 @@ class LibraryViewModel @Inject constructor(
     private val _messages = MutableStateFlow<String?>(null)
     val messages: StateFlow<String?> = _messages
 
+    init {
+        // Downloads run on a background scope, so failures surface here rather
+        // than as a Result. Report each book's failure once.
+        viewModelScope.launch {
+            val reported = mutableSetOf<Long>()
+            observeDownloads().collect { statuses ->
+                statuses.forEach { (id, status) ->
+                    if (status is DownloadStatus.Failed && reported.add(id)) {
+                        _messages.update { "Download failed: ${status.message}" }
+                    }
+                }
+                reported.retainAll { id -> statuses[id] is DownloadStatus.Failed }
+            }
+        }
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     private val libraryAndCategories =
         combine(sortOption, selectedCategoryId) { sort, category -> sort to category }

@@ -6,6 +6,11 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+// Record the Room schema for each DB version so future migrations can be tested.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 android {
     namespace = "com.mipuble"
     compileSdk = 35
