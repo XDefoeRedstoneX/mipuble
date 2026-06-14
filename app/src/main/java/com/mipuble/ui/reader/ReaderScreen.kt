@@ -227,33 +227,41 @@ private fun ChapterWebView(
                 view: WebView,
                 request: WebResourceRequest,
             ): WebResourceResponse? {
-                val url = request.url
-                if (url.host != EpubWebViewBridge.HOST) return null
-                val path = url.path ?: return null
+                // This runs on a WebView worker thread; an uncaught throw here
+                // crashes the whole app, so everything is guarded.
+                return try {
+                    val url = request.url
+                    if (url.host != EpubWebViewBridge.HOST) return null
+                    val path = url.path ?: return null
 
-                // Bundled reader typefaces, served from app assets.
-                if (path.startsWith(EpubWebViewBridge.FONT_PATH_PREFIX)) {
-                    val name = path.removePrefix(EpubWebViewBridge.FONT_PATH_PREFIX)
-                    val bytes = runCatching {
-                        appContext.assets.open("fonts/$name").use { it.readBytes() }
-                    }.getOrNull() ?: return null
-                    return WebResourceResponse(
-                        EpubWebViewBridge.mimeTypeFor(name),
-                        null,
-                        ByteArrayInputStream(bytes),
-                    )
+                    // Bundled reader typefaces, served from app assets.
+                    if (path.startsWith(EpubWebViewBridge.FONT_PATH_PREFIX)) {
+                        val name = path.removePrefix(EpubWebViewBridge.FONT_PATH_PREFIX)
+                        val bytes = runCatching {
+                            appContext.assets.open("fonts/$name").use { it.readBytes() }
+                        }.getOrNull() ?: return null
+                        return WebResourceResponse(
+                            EpubWebViewBridge.mimeTypeFor(name),
+                            null,
+                            ByteArrayInputStream(bytes),
+                        )
+                    }
+
+                    if (!path.startsWith(EpubWebViewBridge.PATH_PREFIX)) return null
+                    val entry = path.removePrefix(EpubWebViewBridge.PATH_PREFIX)
+                    val bytes = readResource(entry) ?: return null
+                    val mime = EpubWebViewBridge.mimeTypeFor(entry)
+
+                    if (mime == "text/html") {
+                        val html = injectStylesheet(String(bytes, Charsets.UTF_8), css.value)
+                        WebResourceResponse(mime, "UTF-8", ByteArrayInputStream(html.toByteArray(Charsets.UTF_8)))
+                    } else {
+                        WebResourceResponse(mime, "UTF-8", ByteArrayInputStream(bytes))
+                    }
+                } catch (e: Throwable) {
+                    android.util.Log.e("MipubleReader", "intercept failed for ${request.url}", e)
+                    null
                 }
-
-                if (!path.startsWith(EpubWebViewBridge.PATH_PREFIX)) return null
-                val entry = path.removePrefix(EpubWebViewBridge.PATH_PREFIX)
-                val bytes = readResource(entry) ?: return null
-                val mime = EpubWebViewBridge.mimeTypeFor(entry)
-
-                if (mime == "text/html") {
-                    val html = injectStylesheet(String(bytes, Charsets.UTF_8), css.value)
-                    return WebResourceResponse(mime, "UTF-8", ByteArrayInputStream(html.toByteArray(Charsets.UTF_8)))
-                }
-                return WebResourceResponse(mime, "UTF-8", ByteArrayInputStream(bytes))
             }
 
             override fun onPageFinished(view: WebView, url: String?) {

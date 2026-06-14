@@ -926,18 +926,49 @@ private fun BoxScope.DownloadOverlay(book: Book, status: DownloadStatus?) {
                 contentAlignment = Alignment.Center,
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(
-                        progress = { status.fraction },
-                        color = Color.White,
-                        modifier = Modifier.size(36.dp),
-                    )
-                    Text(
-                        "${(status.fraction * 100).toInt()}%",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
+                    val fraction = status.fraction
+                    if (fraction == null) {
+                        // Unknown size (Drive sends no length) — indeterminate.
+                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(36.dp))
+                        Text(
+                            "Downloading…",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    } else {
+                        CircularProgressIndicator(
+                            progress = { fraction },
+                            color = Color.White,
+                            modifier = Modifier.size(36.dp),
+                        )
+                        Text(
+                            "${(fraction * 100).toInt()}%",
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
                 }
+            }
+        }
+
+        is DownloadStatus.Failed -> {
+            // Show the tap-to-retry badge in an error tint.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.error)
+                    .padding(4.dp),
+            ) {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = "Download failed — tap to retry",
+                    tint = MaterialTheme.colorScheme.onError,
+                    modifier = Modifier.size(18.dp),
+                )
             }
         }
 

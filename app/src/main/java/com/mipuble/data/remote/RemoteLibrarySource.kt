@@ -20,10 +20,11 @@ interface RemoteLibrarySource {
     suspend fun fetchCover(remoteId: String): ByteArray?
 
     /**
-     * Streams the book's bytes into [target], reporting progress as a fraction
-     * in 0f..1f. Throws on failure (the repository turns this into a Result).
+     * Streams the book's bytes into [target], reporting bytes read and the total
+     * (null when the server doesn't send a length). Throws on failure (the
+     * repository turns this into a Result).
      */
-    suspend fun download(remoteId: String, target: File, onProgress: (Float) -> Unit)
+    suspend fun download(remoteId: String, target: File, onProgress: (read: Long, total: Long?) -> Unit)
 
     /**
      * Uploads [file] into the library folder under [displayName], reporting

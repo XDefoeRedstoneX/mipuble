@@ -49,7 +49,7 @@ class DriveRemoteLibrarySource @Inject constructor(
 
     override suspend fun fetchCover(remoteId: String): ByteArray? = null
 
-    override suspend fun download(remoteId: String, target: File, onProgress: (Float) -> Unit) {
+    override suspend fun download(remoteId: String, target: File, onProgress: (read: Long, total: Long?) -> Unit) {
         val token = token() ?: error("Not signed in to Drive")
         val request = Request.Builder()
             .url("$BASE/files/$remoteId?alt=media")
@@ -57,8 +57,11 @@ class DriveRemoteLibrarySource @Inject constructor(
             .build()
 
         client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) error("Drive download failed: ${response.code}")
+            if (!response.isSuccessful) {
+                error("Drive download failed: ${response.code} ${response.body?.string()?.take(200).orEmpty()}")
+            }
             val body = response.body ?: error("Empty response")
+            // Content-Length is often absent (chunked/gzip), so total may be null.
             val total = body.contentLength().takeIf { it > 0 }
             var read = 0L
             body.byteStream().use { input ->
@@ -69,11 +72,11 @@ class DriveRemoteLibrarySource @Inject constructor(
                         if (n < 0) break
                         output.write(buffer, 0, n)
                         read += n
-                        if (total != null) onProgress((read.toFloat() / total).coerceIn(0f, 1f))
+                        onProgress(read, total)
                     }
+                    output.flush()
                 }
             }
-            onProgress(1f)
         }
     }
 

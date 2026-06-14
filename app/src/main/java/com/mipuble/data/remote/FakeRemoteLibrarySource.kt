@@ -75,9 +75,10 @@ class FakeRemoteLibrarySource @Inject constructor(
         return EpubResourceReader(sample).use { it.read(href) }
     }
 
-    override suspend fun download(remoteId: String, target: File, onProgress: (Float) -> Unit) {
+    override suspend fun download(remoteId: String, target: File, onProgress: (read: Long, total: Long?) -> Unit) {
         val sample = cachedSample() ?: error("Sample asset unavailable")
         val bytes = sample.readBytes()
+        val total = bytes.size.toLong()
 
         // Simulate a chunked transfer so the UI progress ring actually animates.
         val chunks = 10
@@ -86,7 +87,7 @@ class FakeRemoteLibrarySource @Inject constructor(
                 val end = (bytes.size * i / chunks)
                 val start = (bytes.size * (i - 1) / chunks)
                 out.write(bytes, start, end - start)
-                onProgress(i / chunks.toFloat())
+                onProgress(end.toLong(), total)
                 delay(60)
             }
         }

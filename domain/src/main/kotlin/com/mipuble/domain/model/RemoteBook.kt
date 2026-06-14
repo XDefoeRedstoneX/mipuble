@@ -3,7 +3,9 @@ package com.mipuble.domain.model
 /** Live status of an on-demand download, keyed by book id in the repository. */
 sealed interface DownloadStatus {
     data object Idle : DownloadStatus
-    data class Downloading(val fraction: Float) : DownloadStatus
+
+    /** [fraction] is null when the size is unknown (show an indeterminate bar). */
+    data class Downloading(val fraction: Float?) : DownloadStatus
     data class Failed(val message: String) : DownloadStatus
 }
 

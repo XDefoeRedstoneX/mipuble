@@ -51,6 +51,16 @@ class EpubImporter @Inject constructor(
         )
     }
 
+    /** Extracts and stores a cover for an existing book (e.g. after download). */
+    suspend fun storeCover(bookId: Long, file: File) {
+        val epub = runCatching { parser.parse(file) }.getOrNull() ?: return
+        extractCover(file, epub)?.let { (href, bytes) ->
+            val coverFile = File(coversDir(), "$bookId.${href.substringAfterLast('.', "img")}")
+            coverFile.writeBytes(bytes)
+            bookDao.updateCover(bookId, coverFile.absolutePath)
+        }
+    }
+
     /** True if an EPUB with these bytes, or this series|volume, is already present. */
     suspend fun isDuplicate(identity: Identity): Boolean =
         bookDao.findByHash(identity.contentHash) != null ||
@@ -121,15 +131,40 @@ class EpubImporter @Inject constructor(
         // New books join the end of the hand-arranged order (ids are monotonic).
         bookDao.updateCustomOrder(id, id)
 
-        epub?.coverImageHref?.let { href ->
-            val bytes = EpubResourceReader(file).use { it.read(href) }
-            if (bytes != null) {
+        if (epub != null) {
+            extractCover(file, epub)?.let { (href, bytes) ->
                 val coverFile = File(coversDir(), "$id.${href.substringAfterLast('.', "img")}")
                 coverFile.writeBytes(bytes)
                 bookDao.updateCover(id, coverFile.absolutePath)
             }
         }
         return id
+    }
+
+    /**
+     * Finds cover bytes: the declared cover image if any, otherwise the first
+     * image referenced by the opening spine pages (many books wrap their cover
+     * art in the first XHTML page without marking it as the cover).
+     */
+    private fun extractCover(file: File, epub: com.mipuble.domain.model.EpubBook): Pair<String, ByteArray>? =
+        EpubResourceReader(file).use { reader ->
+            epub.coverImageHref?.let { href ->
+                reader.read(href)?.let { return href to it }
+            }
+            for (spineHref in epub.spineHrefs.take(3)) {
+                val xhtml = reader.read(spineHref)?.toString(Charsets.UTF_8) ?: continue
+                val imageRef = firstImageRef(xhtml) ?: continue
+                val resolved = EpubPaths.resolve(EpubPaths.parentOf(spineHref), imageRef)
+                reader.read(resolved)?.let { return resolved to it }
+            }
+            null
+        }
+
+    /** First <img src> or SVG <image href> in an XHTML page. */
+    private fun firstImageRef(html: String): String? {
+        IMG_SRC.find(html)?.let { return it.groupValues[1] }
+        SVG_IMAGE.find(html)?.let { return it.groupValues[1] }
+        return null
     }
 
     private fun sha256(file: File): String {
@@ -147,4 +182,12 @@ class EpubImporter @Inject constructor(
 
     private fun booksDir() = File(context.filesDir, "books").apply { mkdirs() }
     private fun coversDir() = File(context.filesDir, "covers").apply { mkdirs() }
+
+    private companion object {
+        val IMG_SRC = Regex("""<img[^>]+src\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+        val SVG_IMAGE = Regex(
+            """<image[^>]+(?:xlink:href|href)\s*=\s*["']([^"']+)["']""",
+            RegexOption.IGNORE_CASE,
+        )
+    }
 }

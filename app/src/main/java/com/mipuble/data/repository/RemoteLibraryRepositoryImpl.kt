@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.documentfile.provider.DocumentFile
+import com.mipuble.data.di.ApplicationScope
 import com.mipuble.data.epub.EpubImporter
 import com.mipuble.data.local.BookDao
 import com.mipuble.data.local.BookEntity
@@ -21,15 +22,18 @@ import java.io.File
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Singleton
 class RemoteLibraryRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
+    @ApplicationScope private val appScope: CoroutineScope,
     private val source: RemoteLibrarySource,
     private val authProvider: DriveAuthProvider,
     private val bookDao: BookDao,
@@ -80,30 +84,53 @@ class RemoteLibraryRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun download(bookId: Long): Result<Unit> = withContext(Dispatchers.IO) {
+    override suspend fun download(bookId: Long): Result<Unit> {
         val book = bookDao.getById(bookId)
         val remoteId = book?.remoteId
-        when {
+        return when {
             book == null -> Result.failure(IllegalStateException("No such book"))
             remoteId == null -> Result.failure(IllegalStateException("Book isn't remote"))
             book.filePath != null -> Result.success(Unit) // already downloaded
+            bookId in activeDownloads -> Result.success(Unit) // already in flight
             else -> {
-                val target = File(booksDir(), "${remoteId.toFileName()}.epub")
-                setStatus(bookId, DownloadStatus.Downloading(0f))
-                runCatching {
-                    source.download(remoteId, target) { fraction ->
-                        setStatus(bookId, DownloadStatus.Downloading(fraction))
-                    }
-                    bookDao.updateFilePath(bookId, target.absolutePath)
-                }.onSuccess {
-                    clearStatus(bookId)
-                }.onFailure { e ->
-                    target.delete()
-                    setStatus(bookId, DownloadStatus.Failed(e.message ?: "Download failed"))
-                }
+                // Run on an app-lifetime scope so leaving the screen (or this
+                // call returning) doesn't cancel the transfer. Status/failures
+                // surface through the [downloads] flow.
+                appScope.launch(Dispatchers.IO) { runDownload(bookId, remoteId) }
+                Result.success(Unit)
             }
         }
     }
+
+    private val activeDownloads = java.util.Collections.synchronizedSet(mutableSetOf<Long>())
+
+    private suspend fun runDownload(bookId: Long, remoteId: String) {
+        if (!activeDownloads.add(bookId)) return
+        val target = File(booksDir(), "${remoteId.toFileName()}.epub")
+        setStatus(bookId, DownloadStatus.Downloading(null))
+        runCatching {
+            source.download(remoteId, target) { read, total ->
+                val fraction = total?.takeIf { it > 0 }?.let { (read.toFloat() / it).coerceIn(0f, 1f) }
+                setStatus(bookId, DownloadStatus.Downloading(fraction))
+            }
+            // A truncated/HTML-error download must not masquerade as a book.
+            require(isValidEpub(target)) { "Downloaded file isn't a valid EPUB." }
+            bookDao.updateFilePath(bookId, target.absolutePath)
+            // Now that bytes are local, pull a real cover from the file.
+            runCatching { importer.storeCover(bookId, target) }
+        }.onSuccess {
+            clearStatus(bookId)
+        }.onFailure { e ->
+            android.util.Log.e("MipubleDrive", "download failed for book $bookId", e)
+            target.delete()
+            setStatus(bookId, DownloadStatus.Failed(e.message ?: "Download failed"))
+        }
+        activeDownloads.remove(bookId)
+    }
+
+    private fun isValidEpub(file: File): Boolean = runCatching {
+        java.util.zip.ZipFile(file).use { it.getEntry("META-INF/container.xml") != null }
+    }.getOrDefault(false)
 
     override suspend fun evict(bookId: Long): Result<Unit> = withContext(Dispatchers.IO) {
         val book = bookDao.getById(bookId)
