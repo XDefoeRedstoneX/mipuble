@@ -157,7 +157,9 @@ class EpubImporter @Inject constructor(
                 val resolved = EpubPaths.resolve(EpubPaths.parentOf(spineHref), imageRef)
                 reader.read(resolved)?.let { return resolved to it }
             }
-            null
+            // Nothing declared or referenced up front: fall back to scanning the
+            // archive for a real raster image so a cover always shows.
+            reader.fallbackRasterCover()
         }
 
     /** First <img src> or SVG <image href> in an XHTML page. */

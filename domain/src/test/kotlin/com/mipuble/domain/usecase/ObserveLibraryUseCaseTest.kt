@@ -83,6 +83,32 @@ class ObserveLibraryUseCaseTest {
     }
 
     @Test
+    fun `author sort keeps a series together despite mixed unknown authors`() = runTest {
+        // Same series, but only some volumes carry author metadata. A naive
+        // by-author sort would scatter the "Unknown" volumes away from the rest;
+        // the series-aware sort pins them all to the canonical author.
+        val mixed = listOf(
+            book(1, "Spice and Wolf, Vol. 2", author = "Unknown"),
+            book(2, "Spice and Wolf, Vol. 1", author = "Isuna Hasekura"),
+            book(3, "Spice and Wolf, Vol. 10", author = "Unknown"),
+            book(4, "Berserk, Vol. 1", author = "Kentaro Miura"),
+        )
+        val useCase = ObserveLibraryUseCase(repositoryOf(mixed))
+
+        val result = useCase(BookSortOption.AUTHOR).first()
+
+        assertEquals(
+            listOf(
+                "Spice and Wolf, Vol. 1",
+                "Spice and Wolf, Vol. 2",
+                "Spice and Wolf, Vol. 10",
+                "Berserk, Vol. 1",
+            ),
+            result.map { it.title },
+        )
+    }
+
+    @Test
     fun `custom sort follows the persisted hand-arranged order`() = runTest {
         val arranged = listOf(
             book(1, "First imported", customOrder = 2),
