@@ -24,6 +24,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -95,14 +96,25 @@ class RemoteLibraryRepositoryImpl @Inject constructor(
             else -> {
                 // Run on an app-lifetime scope so leaving the screen (or this
                 // call returning) doesn't cancel the transfer. Status/failures
-                // surface through the [downloads] flow.
-                appScope.launch(Dispatchers.IO) { runDownload(bookId, remoteId) }
+                // surface through the [downloads] flow. The Job is tracked so an
+                // evict/delete of the same book can cancel it mid-flight.
+                val job = appScope.launch(Dispatchers.IO) { runDownload(bookId, remoteId) }
+                downloadJobs[bookId] = job
+                job.invokeOnCompletion { downloadJobs.remove(bookId) }
                 Result.success(Unit)
             }
         }
     }
 
     private val activeDownloads = java.util.Collections.synchronizedSet(mutableSetOf<Long>())
+    private val downloadJobs = java.util.concurrent.ConcurrentHashMap<Long, Job>()
+
+    /** Cancels an in-flight download (if any) and clears its status. */
+    private fun cancelDownload(bookId: Long) {
+        downloadJobs.remove(bookId)?.cancel()
+        activeDownloads.remove(bookId)
+        clearStatus(bookId)
+    }
 
     private suspend fun runDownload(bookId: Long, remoteId: String) {
         if (!activeDownloads.add(bookId)) return
@@ -138,6 +150,7 @@ class RemoteLibraryRepositoryImpl @Inject constructor(
             book == null -> Result.failure(IllegalStateException("No such book"))
             book.remoteId == null -> Result.failure(IllegalStateException("Local-only book can't be evicted"))
             else -> runCatching {
+                cancelDownload(bookId) // don't let an in-flight download resurrect it
                 book.filePath?.let { File(it).delete() }
                 bookDao.updateFilePath(bookId, null)
             }
@@ -149,12 +162,18 @@ class RemoteLibraryRepositoryImpl @Inject constructor(
             val book = bookDao.getById(bookId)
                 ?: return@withContext Result.failure(IllegalStateException("No such book"))
             runCatching {
+                cancelDownload(bookId)
                 if (alsoFromDrive) book.remoteId?.let { source.trashBook(it) }
-                book.filePath?.let { File(it).delete() }
-                book.coverPath?.let { File(it).delete() }
+                purgeBookFiles(book)
                 bookDao.deleteById(bookId)
             }
         }
+
+    /** Deletes a book's on-disk EPUB and cover so removing rows doesn't leak files. */
+    private fun purgeBookFiles(book: BookEntity) {
+        book.filePath?.let { File(it).delete() }
+        book.coverPath?.let { File(it).delete() }
+    }
 
     override suspend fun uploadBooks(uriStrings: List<String>): Result<UploadSummary> =
         withContext(Dispatchers.IO) {
@@ -244,7 +263,11 @@ class RemoteLibraryRepositoryImpl @Inject constructor(
                 val folderIds = source.listBooks().map { it.remoteId }.toSet()
                 bookDao.getAll()
                     .filter { it.remoteId == null || it.remoteId !in folderIds }
-                    .forEach { bookDao.deleteById(it.id) }
+                    .forEach { book ->
+                        cancelDownload(book.id)
+                        purgeBookFiles(book)
+                        bookDao.deleteById(book.id)
+                    }
 
                 sync().getOrThrow()
                 bookDao.getAll().size

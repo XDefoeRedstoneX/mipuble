@@ -26,14 +26,14 @@ object TitleNormalizer {
     private val TAGS = Regex("""[\[{(][^\]})]*[\]})]""")
     private val WHITESPACE = Regex("""\s+""")
 
-    // Explicit volume markers (allow leading zeros). Trailing bare number is a
-    // last resort capped at 3 digits so it won't grab a 4-digit year.
+    // Explicit volume markers only (allow leading zeros). A bare trailing number
+    // is deliberately NOT treated as a volume — that would mangle real titles
+    // like "Fahrenheit 451" or "Catch 22".
     private val VOLUME_PATTERNS = listOf(
         Regex("""\bvolume\s*0*(\d{1,4})\b""", RegexOption.IGNORE_CASE),
         Regex("""\bvol\.?\s*0*(\d{1,4})\b""", RegexOption.IGNORE_CASE),
         Regex("""\bv\s*0*(\d{1,4})\b""", RegexOption.IGNORE_CASE),
         Regex("""#\s*0*(\d{1,4})\b"""),
-        Regex("""\b0*(\d{1,3})\s*$"""),
     )
 
     fun normalize(raw: String): Normalized {

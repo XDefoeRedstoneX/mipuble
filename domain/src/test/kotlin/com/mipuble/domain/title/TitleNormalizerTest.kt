@@ -81,4 +81,16 @@ class TitleNormalizerTest {
         // No explicit marker; a year-like trailing number should be ignored.
         assertNull(TitleNormalizer.normalize("Some Book 2021").volume)
     }
+
+    @Test
+    fun `titles ending in a number are not mangled into volumes`() {
+        val a = TitleNormalizer.normalize("Fahrenheit 451")
+        assertNull(a.volume)
+        assertEquals("Fahrenheit 451", a.displayTitle)
+        assertNull(a.dedupKey)
+
+        val b = TitleNormalizer.normalize("Catch 22")
+        assertNull(b.volume)
+        assertEquals("Catch 22", b.displayTitle)
+    }
 }
