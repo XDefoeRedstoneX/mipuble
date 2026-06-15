@@ -19,6 +19,7 @@ import com.mipuble.domain.usecase.CheckRemoteAvailabilityUseCase
 import com.mipuble.domain.usecase.EvictBookUseCase
 import com.mipuble.domain.usecase.ObserveLibraryUseCase
 import com.mipuble.domain.usecase.ObserveUploadsUseCase
+import com.mipuble.domain.usecase.RebuildCoversUseCase
 import com.mipuble.domain.usecase.ResetLibraryToDriveUseCase
 import com.mipuble.domain.usecase.SyncRemoteLibraryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -39,6 +40,7 @@ data class SettingsUiState(
     val remoteAvailable: Boolean = false,
     val isSyncing: Boolean = false,
     val isResetting: Boolean = false,
+    val isRebuildingCovers: Boolean = false,
     val upload: UploadProgress? = null,
     val pendingConsent: PendingIntent? = null,
 )
@@ -52,12 +54,14 @@ class SettingsViewModel @Inject constructor(
     private val syncRemoteLibrary: SyncRemoteLibraryUseCase,
     private val resetLibraryToDrive: ResetLibraryToDriveUseCase,
     private val evictBook: EvictBookUseCase,
+    private val rebuildCovers: RebuildCoversUseCase,
     private val driveAuthProvider: DriveAuthProvider,
 ) : ViewModel() {
 
     private val remoteAvailable = MutableStateFlow(false)
     private val isSyncing = MutableStateFlow(false)
     private val isResetting = MutableStateFlow(false)
+    private val isRebuildingCovers = MutableStateFlow(false)
     private val pendingConsent = MutableStateFlow<PendingIntent?>(null)
 
     /** Re-run after the user grants Drive consent (sync or reset). */
@@ -85,7 +89,8 @@ class SettingsViewModel @Inject constructor(
         preferencesRepository.preferences,
         library,
         status,
-    ) { prefs, books, s ->
+        isRebuildingCovers,
+    ) { prefs, books, s, rebuilding ->
         SettingsUiState(
             preferences = prefs,
             downloadedCount = books.count { it.isDownloaded },
@@ -94,6 +99,7 @@ class SettingsViewModel @Inject constructor(
             remoteAvailable = s.available,
             isSyncing = s.syncing,
             isResetting = s.resetting,
+            isRebuildingCovers = rebuilding,
             upload = s.upload,
             pendingConsent = s.consent,
         )
@@ -173,6 +179,22 @@ class SettingsViewModel @Inject constructor(
             _messages.update {
                 if (ids.isEmpty()) "Nothing to remove." else "Removed ${ids.size} download(s)."
             }
+        }
+    }
+
+    /** Backfills artwork for books still showing a placeholder cover. */
+    fun onRebuildCovers() {
+        if (isRebuildingCovers.value) return
+        viewModelScope.launch {
+            isRebuildingCovers.value = true
+            rebuildCovers()
+                .onSuccess { count ->
+                    _messages.update {
+                        if (count > 0) "Rebuilt $count cover(s)." else "No missing covers to rebuild."
+                    }
+                }
+                .onFailure { e -> _messages.update { e.message ?: "Couldn't rebuild covers." } }
+            isRebuildingCovers.value = false
         }
     }
 

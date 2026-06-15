@@ -52,13 +52,13 @@ class EpubImporter @Inject constructor(
     }
 
     /** Extracts and stores a cover for an existing book (e.g. after download). */
-    suspend fun storeCover(bookId: Long, file: File) {
-        val epub = runCatching { parser.parse(file) }.getOrNull() ?: return
-        extractCover(file, epub)?.let { (href, bytes) ->
-            val coverFile = File(coversDir(), "$bookId.${href.substringAfterLast('.', "img")}")
-            coverFile.writeBytes(bytes)
-            bookDao.updateCover(bookId, coverFile.absolutePath)
-        }
+    suspend fun storeCover(bookId: Long, file: File): Boolean {
+        val epub = runCatching { parser.parse(file) }.getOrNull() ?: return false
+        val (href, bytes) = extractCover(file, epub) ?: return false
+        val coverFile = File(coversDir(), "$bookId.${href.substringAfterLast('.', "img")}")
+        coverFile.writeBytes(bytes)
+        bookDao.updateCover(bookId, coverFile.absolutePath)
+        return true
     }
 
     /** True if an EPUB with these bytes, or this series|volume, is already present. */

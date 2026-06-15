@@ -32,4 +32,11 @@ interface BookRepository {
      * position in [orderedBookIds].
      */
     suspend fun saveCustomOrder(orderedBookIds: List<Long>)
+
+    /**
+     * Re-extracts covers for downloaded books that currently show a placeholder
+     * (no stored cover). Returns how many gained a real cover. Used to backfill
+     * artwork for books imported before the cover-fallback logic existed.
+     */
+    suspend fun rebuildMissingCovers(): Int
 }

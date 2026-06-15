@@ -11,3 +11,11 @@ class ImportEpubUseCase @Inject constructor(
     suspend operator fun invoke(uriString: String): Result<ImportOutcome> =
         repository.importBook(uriString)
 }
+
+/** Backfills covers for downloaded books still showing a placeholder. */
+class RebuildCoversUseCase @Inject constructor(
+    private val repository: BookRepository,
+) {
+    suspend operator fun invoke(): Result<Int> =
+        runCatching { repository.rebuildMissingCovers() }
+}

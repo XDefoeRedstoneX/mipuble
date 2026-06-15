@@ -210,6 +210,16 @@ fun SettingsScreen(
             ) {
                 Text("Remove all downloads (keep books in library)")
             }
+            OutlinedButton(
+                onClick = viewModel::onRebuildCovers,
+                enabled = !uiState.isRebuildingCovers,
+            ) {
+                if (uiState.isRebuildingCovers) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                }
+                Text("Rebuild missing covers")
+            }
 
             HorizontalDivider()
 

@@ -66,6 +66,7 @@ class LibraryViewModelTest {
         override suspend fun saveCustomOrder(orderedBookIds: List<Long>) {
             savedOrder = orderedBookIds
         }
+        override suspend fun rebuildMissingCovers(): Int = 0
     }
 
     private class FakeCategoryRepository : CategoryRepository {

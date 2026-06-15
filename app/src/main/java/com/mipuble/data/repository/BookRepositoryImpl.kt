@@ -6,6 +6,7 @@ import com.mipuble.data.local.toDomain
 import com.mipuble.domain.model.Book
 import com.mipuble.domain.model.ImportOutcome
 import com.mipuble.domain.repository.BookRepository
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
@@ -33,4 +34,12 @@ class BookRepositoryImpl @Inject constructor(
 
     override suspend fun saveCustomOrder(orderedBookIds: List<Long>) =
         bookDao.saveCustomOrder(orderedBookIds)
+
+    override suspend fun rebuildMissingCovers(): Int =
+        bookDao.getAll()
+            .filter { it.coverPath == null && it.filePath != null }
+            .count { entity ->
+                val file = File(entity.filePath!!)
+                file.exists() && importer.storeCover(entity.id, file)
+            }
 }

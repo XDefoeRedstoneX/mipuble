@@ -43,6 +43,7 @@ class ObserveLibraryUseCaseTest {
             Result.success(com.mipuble.domain.model.ImportOutcome.Added(0L))
         override suspend fun setBookCategory(bookId: Long, categoryId: Long?) = Unit
         override suspend fun saveCustomOrder(orderedBookIds: List<Long>) = Unit
+        override suspend fun rebuildMissingCovers(): Int = 0
     }
 
     private val useCase = ObserveLibraryUseCase(repositoryOf(library))
