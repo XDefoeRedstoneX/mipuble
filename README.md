@@ -128,15 +128,3 @@ The reader ships three optional typefaces, all licensed under the
 [Inter](https://github.com/rsms/inter) (© Rasmus Andersson), and
 [Atkinson Hyperlegible](https://www.brailleinstitute.org/freefont/)
 (© Braille Institute of America).
-
-## Project status
-
-- [x] **Phase 0** — Foundation & tooling (buildable skeleton, CI)
-- [x] **Phase 1** — Library screen + natural sorting
-- [x] **Phase 2** — EPUB parsing & reader rendering
-- [x] **Phase 3** — Reader UX + precise brightness
-- [x] **Phase 4** — Custom organization (colors + drag-and-drop)
-- [x] **Phase 5** — Download on demand (Google Drive)
-- [x] **Phase 6** — Multi-module split, tests, a11y, polish
-
-See `CLAUDE.md` for per-phase implementation notes.
