@@ -323,19 +323,12 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    /** Confirms one reviewed book's official name (teaching the catalog any new name). */
-    fun onResolveReview(bookId: Long, canonicalSeries: String) {
-        val name = canonicalSeries.trim()
-        if (name.isEmpty()) return
-        viewModelScope.launch { resolveReview(bookId, name, addToCatalog = true) }
-    }
-
     /** Confirms every reviewed book's selected name in one pass. */
-    fun onApplyAllReviews(selections: List<Pair<Long, String>>) {
-        val valid = selections.filter { it.second.isNotBlank() }
+    fun onApplyAllReviews(decisions: List<ReviewDecision>) {
+        val valid = decisions.filter { it.name.isNotBlank() }
         if (valid.isEmpty()) return
         viewModelScope.launch {
-            valid.forEach { (bookId, name) -> resolveReview(bookId, name.trim(), addToCatalog = true) }
+            valid.forEach { resolveReview(it.bookId, it.name.trim(), it.addToCatalog) }
             _messages.update { "Applied ${valid.size} name(s)." }
         }
     }

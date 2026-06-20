@@ -20,6 +20,8 @@ class SeriesCatalog(names: Iterable<String>) {
         val collapsed: String,
         /** Tokens substantial enough to anchor a merged-word match. */
         val significant: List<String>,
+        /** [significant] tokens concatenated, for the merged-word character ratio. */
+        val significantCollapsed: String,
     )
 
     private val entries: List<Entry> = names
@@ -29,7 +31,16 @@ class SeriesCatalog(names: Iterable<String>) {
         .distinctBy { it.lowercase() }
         .map {
             val tokens = StringSimilarity.tokenize(it)
-            Entry(it, tokens, StringSimilarity.collapse(it), tokens.filter { t -> t.length >= 3 })
+            val significant = tokens.filter { t -> t.length >= 3 }
+            Entry(
+                canonical = it,
+                tokens = tokens,
+                collapsed = StringSimilarity.collapse(it),
+                significant = significant,
+                // The collapsed form with stopwords dropped, so "Spice and Wolf"
+                // ("spicewolf") matches the merged filename "SpiceWolf" exactly.
+                significantCollapsed = significant.joinToString(""),
+            )
         }
 
     val size: Int get() = entries.size
@@ -77,14 +88,18 @@ class SeriesCatalog(names: Iterable<String>) {
                 val significant = qTokens.any { it.length >= 3 && it in entry.tokens }
                 val tokenScore = if (significant) coverage else 0f
                 val charScore = StringSimilarity.ratio(qCollapsed, entry.collapsed)
-                // Merged-word case ("spicewolf" -> "Spice and Wolf"): every
-                // substantial official word appears in the collapsed query.
-                // Restricted to multi-word names so a single common word can't
-                // hijack the match ("Berserker's Tale" must not become "Berserk").
-                val mergedExact = entry.significant.size >= 2 &&
-                    entry.significant.all { qCollapsed.contains(it) }
+                // Merged-word case ("spicewolf" -> "Spice and Wolf"): compare the
+                // query to the official name with stopwords removed. Using a whole-
+                // string ratio (not per-word substring) avoids matching a word that
+                // merely sits *inside* another ("air" within "repair"). Restricted
+                // to multi-word names so a single word can't hijack the match.
+                val mergedScore = if (entry.significant.size >= 2) {
+                    StringSimilarity.ratio(qCollapsed, entry.significantCollapsed)
+                } else {
+                    0f
+                }
                 val dice = StringSimilarity.diceCoefficient(qTokens, entry.tokens)
-                Scored(entry, maxOf(tokenScore, charScore, if (mergedExact) 1f else 0f), dice)
+                Scored(entry, maxOf(tokenScore, charScore, mergedScore), dice)
             }
             .sortedWith(
                 compareByDescending<Scored> { it.score }

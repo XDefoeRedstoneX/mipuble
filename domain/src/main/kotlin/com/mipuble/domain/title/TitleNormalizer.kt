@@ -25,10 +25,10 @@ object TitleNormalizer {
         /** No catalog consulted (or it was empty): plain cleanup, today's behavior. */
         NONE,
 
-        /** Strong, unambiguous match — applied automatically without asking. */
+        /** Strong match — pre-selected as the best guess in the review sheet. */
         AUTO,
 
-        /** Uncertain — show [Normalized.suggestions] and let the user confirm/add. */
+        /** Weaker match — pre-selected too, but with closer scrutiny expected. */
         REVIEW,
     }
 
@@ -39,7 +39,7 @@ object TitleNormalizer {
         /** series+volume identity, or null for volume-less standalone books. */
         val dedupKey: String?,
         val confidence: MatchConfidence = MatchConfidence.NONE,
-        /** Closest official names (best first) when [confidence] is REVIEW. */
+        /** Closest official names (best first); empty only when no catalog was consulted. */
         val suggestions: List<String> = emptyList(),
     )
 
@@ -118,21 +118,35 @@ object TitleNormalizer {
         val match = BARE_TRAILING.find(stripped) ?: return null
         val n = match.groupValues[1].toIntOrNull() ?: return null
         val remainder = stripped.removeRange(match.range).trim()
-        if (remainder.isBlank()) return null            // the whole title is the number
-        if (canonical.contains(n.toString())) return null // number is part of the official name
+        if (remainder.isBlank()) return null // the whole title is the number
+        // Skip only when the number is part of the official name as a *standalone*
+        // number ("Mob Psycho 100"), not merely a digit inside one ("86" → "6").
+        val standalone = Regex("(?<!\\d)${Regex.escape(n.toString())}(?!\\d)")
+        if (standalone.containsMatchIn(canonical)) return null
         return n
     }
+
+    /** The canonical display title for a confirmed series + optional volume. */
+    fun displayTitleFor(series: String, volume: Int?): String =
+        if (volume != null) "$series, Vol. $volume" else series
+
+    /** The series+volume dedup identity, or null for a volume-less standalone. */
+    fun dedupKeyFor(series: String, volume: Int?): String? =
+        volume?.let { "${key(series)}|$it" }
 
     private fun result(
         series: String,
         volume: Int?,
         confidence: MatchConfidence,
         suggestions: List<String>,
-    ): Normalized {
-        val displayTitle = if (volume != null) "$series, Vol. $volume" else series
-        val dedupKey = volume?.let { "${key(series)}|$it" }
-        return Normalized(series, volume, displayTitle, dedupKey, confidence, suggestions)
-    }
+    ): Normalized = Normalized(
+        series = series,
+        volume = volume,
+        displayTitle = displayTitleFor(series, volume),
+        dedupKey = dedupKeyFor(series, volume),
+        confidence = confidence,
+        suggestions = suggestions,
+    )
 
     private fun cleanup(value: String): String =
         WHITESPACE.replace(value.trim().trim('-', '~', ':', ',', '.', ' '), " ").trim()

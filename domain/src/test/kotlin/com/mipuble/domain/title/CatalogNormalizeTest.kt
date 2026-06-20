@@ -46,6 +46,16 @@ class CatalogNormalizeTest {
     }
 
     @Test
+    fun `a digit inside the official name does not block a real trailing volume`() {
+        // "86―EIGHTY-SIX" contains '8' and '6', but neither is a standalone "6";
+        // a trailing "6" is still a genuine volume.
+        val c = SeriesCatalog(listOf("86―EIGHTY-SIX"))
+        val n = TitleNormalizer.normalize("86―EIGHTY-SIX 6", c)
+        assertEquals(MatchConfidence.AUTO, n.confidence)
+        assertEquals(6, n.volume)
+    }
+
+    @Test
     fun `unknown title with a trailing number is not mangled and goes to review`() {
         // "Fahrenheit 451" isn't in the catalog, so it must NOT auto-rename and
         // must NOT treat 451 as a volume.

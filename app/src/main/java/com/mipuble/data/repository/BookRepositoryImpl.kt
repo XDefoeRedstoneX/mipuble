@@ -49,9 +49,11 @@ class BookRepositoryImpl @Inject constructor(
         // Keep any volume already detected in the current title, but rebuild the
         // series part from the confirmed official name.
         val volume = TitleNormalizer.normalize(book.title).volume
-        val combined = if (volume != null) "$canonicalSeries, Vol. $volume" else canonicalSeries
-        val normalized = TitleNormalizer.normalize(combined)
-        bookDao.applyReviewedTitle(bookId, normalized.displayTitle, normalized.dedupKey)
+        bookDao.applyReviewedTitle(
+            id = bookId,
+            title = TitleNormalizer.displayTitleFor(canonicalSeries, volume),
+            dedupKey = TitleNormalizer.dedupKeyFor(canonicalSeries, volume),
+        )
     }
 
     override suspend fun dismissReview(bookId: Long) = bookDao.clearReview(bookId)
