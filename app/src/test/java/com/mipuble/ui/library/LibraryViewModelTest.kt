@@ -24,6 +24,7 @@ import com.mipuble.domain.usecase.ObserveReviewQueueUseCase
 import com.mipuble.domain.usecase.ObserveUploadsUseCase
 import com.mipuble.domain.usecase.ResolveReviewUseCase
 import com.mipuble.domain.usecase.SaveCustomOrderUseCase
+import com.mipuble.domain.usecase.SearchCatalogUseCase
 import com.mipuble.domain.usecase.SyncRemoteLibraryUseCase
 import com.mipuble.domain.usecase.UpdateCategoryUseCase
 import com.mipuble.domain.model.ImportOutcome
@@ -134,6 +135,7 @@ class LibraryViewModelTest {
             observeReviewQueue = ObserveReviewQueueUseCase(bookRepository),
             resolveReview = ResolveReviewUseCase(bookRepository, FakeCatalogRepository()),
             dismissReview = DismissReviewUseCase(bookRepository),
+            searchCatalog = SearchCatalogUseCase(FakeCatalogRepository()),
             driveAuthProvider = UnconfiguredDriveAuthProvider(),
         )
     }

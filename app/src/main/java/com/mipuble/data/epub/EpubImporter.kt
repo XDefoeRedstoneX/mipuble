@@ -106,7 +106,8 @@ class EpubImporter @Inject constructor(
                     target.outputStream().use { input.copyTo(it) }
                 }
             }
-            finishImport(target, identify(target, fallbackName = assetName))
+            // The bundled sample is known-good; don't drop it into the review queue.
+            finishImport(target, identify(target, fallbackName = assetName), review = false)
         }
     }
 
@@ -126,9 +127,13 @@ class EpubImporter @Inject constructor(
         identity: Identity,
         remoteId: String? = null,
         remoteSize: Long? = null,
+        review: Boolean = true,
     ): Long {
         val epub = runCatching { parser.parse(file) }.getOrNull()
-        val needsReview = identity.confidence == TitleNormalizer.MatchConfidence.REVIEW
+        // Every user-added book is confirmed in the review sheet (with its best
+        // guess pre-selected) — only skipped when there's no catalog to match against.
+        val needsReview = review &&
+            identity.confidence != TitleNormalizer.MatchConfidence.NONE
         val id = bookDao.insert(
             BookEntity(
                 title = identity.displayTitle.ifBlank { file.nameWithoutExtension },

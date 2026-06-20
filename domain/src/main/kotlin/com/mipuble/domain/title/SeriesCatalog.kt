@@ -38,6 +38,27 @@ class SeriesCatalog(names: Iterable<String>) {
     fun match(query: String): Match? = ranked(query, limit = 1).firstOrNull()
 
     /**
+     * Free-text lookup for the review sheet's search box: names that *contain*
+     * the query (shortest first, so the tightest title wins) topped up with the
+     * closest fuzzy matches. Empty query yields nothing.
+     */
+    fun search(query: String, limit: Int): List<String> {
+        val q = query.trim().lowercase()
+        if (q.isEmpty()) return emptyList()
+        val contains = entries
+            .filter { it.canonical.lowercase().contains(q) }
+            .sortedWith(compareBy({ it.canonical.length }, { it.canonical }))
+            .map { it.canonical }
+        if (contains.size >= limit) return contains.take(limit)
+        // Top up with fuzzy matches, but only relevant ones — never pad the list
+        // with unrelated titles just to reach the limit.
+        val fuzzy = ranked(query, limit)
+            .filter { it.score >= 0.5f && it.canonical !in contains }
+            .map { it.canonical }
+        return (contains + fuzzy).take(limit)
+    }
+
+    /**
      * Top [limit] candidates for [query], best first — used both for the
      * confident auto-rename (top 1) and to populate the review sheet's
      * suggestions. Deterministic: ties break by tightness, then length, then name.

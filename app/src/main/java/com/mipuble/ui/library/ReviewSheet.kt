@@ -8,64 +8,93 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateMap
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.mipuble.domain.model.Book
+import kotlinx.coroutines.delay
 
 /**
- * Post-import confirmation for books whose catalog match was uncertain. Each
- * row shows the imported title, the closest official names as tappable chips,
- * an editable field, and an "add to catalog" toggle so a confirmed name is
- * learned for next time. Resolving or skipping removes the row; the sheet
- * closes once the queue is empty.
+ * Post-import confirmation. Every newly added book is listed with its best-guess
+ * official name pre-selected; the user can switch to another close suggestion,
+ * or search the full catalog per book. "Apply all" confirms every row's
+ * selection at once (and teaches the catalog any new names); a row can be
+ * skipped to keep its imported title.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReviewSheet(
     books: List<Book>,
-    onResolve: (bookId: Long, name: String, addToCatalog: Boolean) -> Unit,
+    onApplyAll: (List<Pair<Long, String>>) -> Unit,
     onSkip: (bookId: Long) -> Unit,
+    onSearch: suspend (String) -> List<String>,
     onDismiss: () -> Unit,
 ) {
+    // Per-book chosen name, defaulting to the top suggestion (or the imported
+    // title when nothing matched). Survives recomposition as rows scroll.
+    val selections: SnapshotStateMap<Long, String> = remember { mutableStateMapOf() }
+    books.forEach { book ->
+        selections.getOrPut(book.id) { book.reviewSuggestions.firstOrNull() ?: book.title }
+    }
+
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-            Text(
-                "Confirm book names",
-                style = MaterialTheme.typography.titleLarge,
-            )
+            Text("Confirm book names", style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(4.dp))
             Text(
-                "These didn't clearly match an official series. Pick a suggestion, " +
-                    "edit the name, or skip to keep it as-is.",
+                "Pick the right official series for each book, or search for it. " +
+                    "Apply all accepts the highlighted choices.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(12.dp))
 
-            LazyColumn {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(
+                    onClick = { onApplyAll(books.map { it.id to (selections[it.id] ?: it.title) }) },
+                ) { Text("Apply all (${books.size})") }
+                TextButton(onClick = onDismiss) { Text("Later") }
+            }
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider()
+
+            LazyColumn(modifier = Modifier.heightIn(max = 460.dp)) {
                 items(books, key = { it.id }) { book ->
-                    ReviewRow(book = book, onResolve = onResolve, onSkip = onSkip)
+                    ReviewRow(
+                        book = book,
+                        selected = selections[book.id] ?: book.title,
+                        onSelect = { selections[book.id] = it },
+                        onSkip = { onSkip(book.id) },
+                        onSearch = onSearch,
+                    )
                     HorizontalDivider()
                 }
             }
@@ -78,12 +107,24 @@ fun ReviewSheet(
 @Composable
 private fun ReviewRow(
     book: Book,
-    onResolve: (bookId: Long, name: String, addToCatalog: Boolean) -> Unit,
-    onSkip: (bookId: Long) -> Unit,
+    selected: String,
+    onSelect: (String) -> Unit,
+    onSkip: () -> Unit,
+    onSearch: suspend (String) -> List<String>,
 ) {
-    val firstSuggestion = book.reviewSuggestions.firstOrNull() ?: book.title
-    var name by rememberSaveable(book.id) { mutableStateOf(firstSuggestion) }
-    var addToCatalog by rememberSaveable(book.id) { mutableStateOf(false) }
+    var query by rememberSaveable(book.id) { mutableStateOf("") }
+    val results = remember { mutableStateListOf<String>() }
+
+    // Debounced catalog search as the user types.
+    LaunchedEffect(query) {
+        if (query.isBlank()) {
+            results.clear()
+        } else {
+            delay(200)
+            results.clear()
+            results.addAll(onSearch(query))
+        }
+    }
 
     Column(modifier = Modifier.padding(vertical = 12.dp)) {
         Text(
@@ -91,14 +132,21 @@ private fun ReviewRow(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        Spacer(Modifier.height(2.dp))
+        Text(
+            "→ $selected",
+            style = MaterialTheme.typography.bodyLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
         Spacer(Modifier.height(8.dp))
 
+        // Top suggestions as quick-pick chips.
         if (book.reviewSuggestions.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 book.reviewSuggestions.forEach { suggestion ->
                     FilterChip(
-                        selected = name == suggestion,
-                        onClick = { name = suggestion },
+                        selected = selected == suggestion,
+                        onClick = { onSelect(suggestion) },
                         label = { Text(suggestion, maxLines = 1) },
                     )
                 }
@@ -107,28 +155,32 @@ private fun ReviewRow(
         }
 
         OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            label = { Text("Official series name") },
+            value = query,
+            onValueChange = { query = it },
+            label = { Text("Search the catalog") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(checked = addToCatalog, onCheckedChange = { addToCatalog = it })
-            Text("Add to catalog for next time", style = MaterialTheme.typography.bodyMedium)
+        // Search hits — tapping one selects it and collapses the list.
+        results.take(6).forEach { hit ->
+            TextButton(
+                onClick = {
+                    onSelect(hit)
+                    query = ""
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    hit,
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-        ) {
-            TextButton(onClick = { onSkip(book.id) }) { Text("Skip") }
-            Spacer(Modifier.height(0.dp))
-            OutlinedButton(
-                onClick = { onResolve(book.id, name, addToCatalog) },
-                enabled = name.isNotBlank(),
-            ) { Text("Apply") }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = onSkip) { Text("Skip this one") }
         }
     }
 }

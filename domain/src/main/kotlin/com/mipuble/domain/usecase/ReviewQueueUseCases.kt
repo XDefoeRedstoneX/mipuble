@@ -35,3 +35,11 @@ class DismissReviewUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(bookId: Long) = repository.dismissReview(bookId)
 }
+
+/** Free-text catalog lookup powering the review sheet's per-book search box. */
+class SearchCatalogUseCase @Inject constructor(
+    private val repository: CatalogRepository,
+) {
+    suspend operator fun invoke(query: String, limit: Int = 10): List<String> =
+        repository.catalog().search(query, limit)
+}

@@ -55,6 +55,18 @@ class SeriesCatalogTest {
     }
 
     @Test
+    fun `search prioritizes substring hits, shortest first`() {
+        val c = SeriesCatalog(listOf("GANTZ", "GANTZ:G", "A Certain Magical Index"))
+        val hits = c.search("gantz", limit = 5)
+        assertEquals(listOf("GANTZ", "GANTZ:G"), hits)
+    }
+
+    @Test
+    fun `blank search returns nothing`() {
+        assertTrue(catalog.search("   ", limit = 5).isEmpty())
+    }
+
+    @Test
     fun `empty catalog yields no match`() {
         assertEquals(null, SeriesCatalog(emptyList()).match("anything"))
     }

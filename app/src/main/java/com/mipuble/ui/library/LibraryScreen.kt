@@ -213,10 +213,9 @@ fun LibraryScreen(
     if (showReview && uiState.reviewQueue.isNotEmpty()) {
         ReviewSheet(
             books = uiState.reviewQueue,
-            onResolve = { bookId, name, addToCatalog ->
-                viewModel.onResolveReview(bookId, name, addToCatalog)
-            },
+            onApplyAll = viewModel::onApplyAllReviews,
             onSkip = viewModel::onDismissReview,
+            onSearch = viewModel::onSearchCatalog,
             onDismiss = { showReview = false },
         )
     }

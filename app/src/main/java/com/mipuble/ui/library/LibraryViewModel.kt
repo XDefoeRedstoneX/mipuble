@@ -29,6 +29,7 @@ import com.mipuble.domain.usecase.ObserveReviewQueueUseCase
 import com.mipuble.domain.usecase.ObserveUploadsUseCase
 import com.mipuble.domain.usecase.ResolveReviewUseCase
 import com.mipuble.domain.usecase.SaveCustomOrderUseCase
+import com.mipuble.domain.usecase.SearchCatalogUseCase
 import com.mipuble.domain.usecase.SyncRemoteLibraryUseCase
 import com.mipuble.domain.usecase.UpdateCategoryUseCase
 import com.mipuble.domain.usecase.UploadBooksToDriveUseCase
@@ -88,6 +89,7 @@ class LibraryViewModel @Inject constructor(
     observeReviewQueue: ObserveReviewQueueUseCase,
     private val resolveReview: ResolveReviewUseCase,
     private val dismissReview: DismissReviewUseCase,
+    private val searchCatalog: SearchCatalogUseCase,
     private val driveAuthProvider: DriveAuthProvider,
 ) : ViewModel() {
 
@@ -321,13 +323,20 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    /** Confirms a reviewed book's official name, optionally teaching the catalog. */
-    fun onResolveReview(bookId: Long, canonicalSeries: String, addToCatalog: Boolean) {
+    /** Confirms one reviewed book's official name (teaching the catalog any new name). */
+    fun onResolveReview(bookId: Long, canonicalSeries: String) {
         val name = canonicalSeries.trim()
         if (name.isEmpty()) return
+        viewModelScope.launch { resolveReview(bookId, name, addToCatalog = true) }
+    }
+
+    /** Confirms every reviewed book's selected name in one pass. */
+    fun onApplyAllReviews(selections: List<Pair<Long, String>>) {
+        val valid = selections.filter { it.second.isNotBlank() }
+        if (valid.isEmpty()) return
         viewModelScope.launch {
-            resolveReview(bookId, name, addToCatalog)
-            _messages.update { "Renamed to \"$name\"." }
+            valid.forEach { (bookId, name) -> resolveReview(bookId, name.trim(), addToCatalog = true) }
+            _messages.update { "Applied ${valid.size} name(s)." }
         }
     }
 
@@ -335,6 +344,9 @@ class LibraryViewModel @Inject constructor(
     fun onDismissReview(bookId: Long) {
         viewModelScope.launch { dismissReview(bookId) }
     }
+
+    /** Looks up catalog names for the review sheet's per-book search box. */
+    suspend fun onSearchCatalog(query: String): List<String> = searchCatalog(query)
 
     fun onUnavailableBook() {
         _messages.update { "This book isn't downloaded yet." }

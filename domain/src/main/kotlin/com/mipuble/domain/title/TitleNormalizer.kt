@@ -100,11 +100,12 @@ object TitleNormalizer {
         val runnerUp = ranked.getOrNull(1)?.score ?: 0f
 
         return if (best.score >= thresholds.auto && best.score - runnerUp >= thresholds.margin) {
-            // Confident: adopt the official name, and now a leftover number is
-            // safe to read as a volume — unless the number is part of the
-            // official name itself (e.g. "Mob Psycho 100").
+            // Confident: adopt the official name as the pre-selected guess, and a
+            // leftover number is now safe to read as a volume — unless the number
+            // is part of the official name itself (e.g. "Mob Psycho 100"). The
+            // alternatives still ride along so the user can override.
             if (volume == null) volume = bareVolume(stripped, best.canonical)
-            result(best.canonical, volume, MatchConfidence.AUTO, emptyList())
+            result(best.canonical, volume, MatchConfidence.AUTO, ranked.map { it.canonical })
         } else {
             // Uncertain: keep the cleaned original as the fallback title, but
             // hand the UI the closest official names to confirm or add.
