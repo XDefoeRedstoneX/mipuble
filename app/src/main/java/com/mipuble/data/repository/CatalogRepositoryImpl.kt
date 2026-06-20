@@ -25,29 +25,35 @@ class CatalogRepositoryImpl @Inject constructor(
 
     private val mutex = Mutex()
     @Volatile private var cached: SeriesCatalog? = null
+    // The names backing [cached], kept in memory so addSeries doesn't re-read the
+    // bundled asset (~2000 lines) on every confirmation.
+    private var cachedNames: List<String> = emptyList()
 
     override suspend fun catalog(): SeriesCatalog {
         cached?.let { return it }
-        return mutex.withLock {
-            cached ?: build().also { cached = it }
-        }
+        return mutex.withLock { cached ?: build() }
     }
 
     override suspend fun addSeries(name: String) {
         val clean = name.trim()
         if (clean.isEmpty()) return
         mutex.withLock {
-            val existing = readAllNames()
-            if (existing.any { it.equals(clean, ignoreCase = true) }) return
+            if (cached == null) build()
+            if (cachedNames.any { it.equals(clean, ignoreCase = true) }) return
             withContext(Dispatchers.IO) {
                 overlayFile().apply { parentFile?.mkdirs() }.appendText(clean + "\n")
+                cachedNames = cachedNames + clean
+                cached = SeriesCatalog(cachedNames)
             }
-            cached = SeriesCatalog(existing + clean)
         }
     }
 
-    private suspend fun build(): SeriesCatalog =
-        withContext(Dispatchers.IO) { SeriesCatalog(readAllNames()) }
+    /** Loads names off the IO dispatcher and populates the cache. Call under [mutex]. */
+    private suspend fun build(): SeriesCatalog = withContext(Dispatchers.IO) {
+        val names = readAllNames()
+        cachedNames = names
+        SeriesCatalog(names).also { cached = it }
+    }
 
     /** Bundled base names followed by user-overlay names. */
     private fun readAllNames(): List<String> = bundledNames() + overlayNames()

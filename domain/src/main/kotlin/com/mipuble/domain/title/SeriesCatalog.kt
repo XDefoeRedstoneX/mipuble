@@ -62,9 +62,11 @@ class SeriesCatalog(names: Iterable<String>) {
             .map { it.canonical }
         if (contains.size >= limit) return contains.take(limit)
         // Top up with fuzzy matches, but only relevant ones — never pad the list
-        // with unrelated titles just to reach the limit.
-        val fuzzy = ranked(query, limit)
-            .filter { it.score >= 0.5f && it.canonical !in contains }
+        // with unrelated titles just to reach the limit. Rank enough to refill
+        // after dropping the substring hits we already have.
+        val containsSet = contains.toHashSet()
+        val fuzzy = ranked(query, limit + contains.size)
+            .filter { it.score >= 0.5f && it.canonical !in containsSet }
             .map { it.canonical }
         return (contains + fuzzy).take(limit)
     }

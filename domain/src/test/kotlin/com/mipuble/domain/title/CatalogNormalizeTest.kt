@@ -62,15 +62,24 @@ class CatalogNormalizeTest {
         val n = TitleNormalizer.normalize("Fahrenheit 451", catalog)
         assertNull(n.volume)
         assertEquals(MatchConfidence.REVIEW, n.confidence)
-        assertTrue(n.suggestions.isNotEmpty())
     }
 
     @Test
-    fun `weak match keeps the cleaned original but offers suggestions`() {
+    fun `a wholly unrelated title is reviewed but offers no weak suggestions`() {
+        // Nothing in the catalog is close, so we don't pre-select a wrong name;
+        // the row keeps the original and lets the user search.
         val n = TitleNormalizer.normalize("Totally Made Up Series", catalog)
         assertEquals("Totally Made Up Series", n.series)
         assertEquals(MatchConfidence.REVIEW, n.confidence)
-        assertTrue(n.suggestions.isNotEmpty())
+        assertTrue(n.suggestions.isEmpty())
+    }
+
+    @Test
+    fun `a near-miss is reviewed and does offer suggestions`() {
+        // Close enough to clear the suggestion floor without being auto-confident.
+        val n = TitleNormalizer.normalize("Mob Psych", catalog)
+        assertEquals(MatchConfidence.REVIEW, n.confidence)
+        assertTrue(n.suggestions.contains("Mob Psycho 100"))
     }
 
     @Test

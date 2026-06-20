@@ -46,9 +46,10 @@ class BookRepositoryImpl @Inject constructor(
 
     override suspend fun applyCanonicalName(bookId: Long, canonicalSeries: String) {
         val book = bookDao.getById(bookId) ?: return
-        // Keep any volume already detected in the current title, but rebuild the
-        // series part from the confirmed official name.
-        val volume = TitleNormalizer.normalize(book.title).volume
+        // Keep the volume from the current title — including a bare trailing
+        // number, now safe to read since the user confirmed the series — and
+        // rebuild the series part from the confirmed official name.
+        val volume = TitleNormalizer.volumeForConfirmed(book.title, canonicalSeries)
         bookDao.applyReviewedTitle(
             id = bookId,
             title = TitleNormalizer.displayTitleFor(canonicalSeries, volume),

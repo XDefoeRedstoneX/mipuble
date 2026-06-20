@@ -51,6 +51,8 @@ object TitleNormalizer {
         val margin: Float = 0.05f,
         /** How many suggestions to surface for review. */
         val suggestionCount: Int = 3,
+        /** Below this score a candidate is too weak to suggest — don't pre-select it. */
+        val suggestionFloor: Float = 0.5f,
     )
 
     // Bracketed source/quality tags: [..], {..}, (..).
@@ -69,24 +71,28 @@ object TitleNormalizer {
     // A number at the very end, optionally after a separator: "Series 4", "Series - 04".
     private val BARE_TRAILING = Regex("""[\s\-_:#]*0*(\d{1,4})\s*$""")
 
-    fun normalize(raw: String, catalog: SeriesCatalog? = null, thresholds: Thresholds = Thresholds()): Normalized {
-        val stripped = WHITESPACE.replace(
+    /** Strips the `.epub` suffix and bracketed tags, then collapses whitespace. */
+    private fun preclean(raw: String): String =
+        WHITESPACE.replace(
             TAGS.replace(raw.trim().removeSuffix(".epub").trim(), " "),
             " ",
         ).trim()
 
-        var volume: Int? = null
-        var seriesPart = stripped
+    /** First explicit volume marker (volume/vol/v/#) in [stripped], if any. */
+    private fun explicitVolume(stripped: String): Pair<Int?, String> {
         for (pattern in VOLUME_PATTERNS) {
             val match = pattern.find(stripped) ?: continue
-            volume = match.groupValues[1].toIntOrNull()
-            // The series is whatever precedes the volume marker; fall back to
-            // the remainder if the marker is at the very start.
             val before = stripped.substring(0, match.range.first)
-            seriesPart = if (before.isNotBlank()) before else stripped.removeRange(match.range)
-            break
+            val seriesPart = if (before.isNotBlank()) before else stripped.removeRange(match.range)
+            return match.groupValues[1].toIntOrNull() to seriesPart
         }
+        return null to stripped
+    }
 
+    fun normalize(raw: String, catalog: SeriesCatalog? = null, thresholds: Thresholds = Thresholds()): Normalized {
+        val stripped = preclean(raw)
+        val (parsedVolume, seriesPart) = explicitVolume(stripped)
+        var volume = parsedVolume
         val cleanedSeries = cleanup(seriesPart).ifBlank { cleanup(stripped) }.ifBlank { raw.trim() }
 
         // Without a catalog, behave exactly as before.
@@ -98,20 +104,34 @@ object TitleNormalizer {
         val best = ranked.firstOrNull()
             ?: return result(cleanedSeries, volume, MatchConfidence.NONE, emptyList())
         val runnerUp = ranked.getOrNull(1)?.score ?: 0f
+        // Only surface candidates strong enough to be worth a click — a wall of
+        // unrelated names (for a true standalone) would otherwise be pre-selected.
+        val suggestions = ranked.filter { it.score >= thresholds.suggestionFloor }.map { it.canonical }
 
         return if (best.score >= thresholds.auto && best.score - runnerUp >= thresholds.margin) {
             // Confident: adopt the official name as the pre-selected guess, and a
             // leftover number is now safe to read as a volume — unless the number
-            // is part of the official name itself (e.g. "Mob Psycho 100"). The
-            // alternatives still ride along so the user can override.
+            // is part of the official name itself (e.g. "Mob Psycho 100").
             if (volume == null) volume = bareVolume(stripped, best.canonical)
-            result(best.canonical, volume, MatchConfidence.AUTO, ranked.map { it.canonical })
+            result(best.canonical, volume, MatchConfidence.AUTO, suggestions)
         } else {
-            // Uncertain: keep the cleaned original as the fallback title, but
-            // hand the UI the closest official names to confirm or add.
-            result(cleanedSeries, volume, MatchConfidence.REVIEW, ranked.map { it.canonical })
+            // Uncertain: keep the cleaned original as the fallback title, but hand
+            // the UI the closest official names (if any are close) to confirm.
+            result(cleanedSeries, volume, MatchConfidence.REVIEW, suggestions)
         }
     }
+
+    /**
+     * The volume in [rawTitle] once its series is known/confirmed — explicit
+     * markers, plus a bare trailing number (safe now that [canonicalSeries] is
+     * settled). Used when the user confirms a name in the review sheet so a
+     * bare-number volume isn't lost.
+     */
+    fun volumeForConfirmed(rawTitle: String, canonicalSeries: String): Int? {
+        val stripped = preclean(rawTitle)
+        return explicitVolume(stripped).first ?: bareVolume(stripped, canonicalSeries)
+    }
+
 
     /** Pulls a trailing bare number as a volume, ignoring numbers that belong to the series name. */
     private fun bareVolume(stripped: String, canonical: String): Int? {
@@ -154,7 +174,8 @@ object TitleNormalizer {
     /**
      * Collapses a series name to a stable matching key — case-, punctuation- and
      * space-insensitive, so "Re:Zero" and "re zero" hash to the same identity.
+     * Shares [StringSimilarity.collapse] so the dedup key and catalog matching
+     * canonicalize identically.
      */
-    private fun key(series: String): String =
-        series.lowercase().filter { it.isLetterOrDigit() }
+    private fun key(series: String): String = StringSimilarity.collapse(series)
 }
