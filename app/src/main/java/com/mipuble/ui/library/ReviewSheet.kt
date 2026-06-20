@@ -169,10 +169,30 @@ private fun ReviewRow(
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            label = { Text("Search the catalog") },
+            label = { Text("Search, or type a new name") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+
+        // Let the user commit a brand-new official name (taught to the catalog on
+        // apply) when the catalog has nothing matching what they typed.
+        val typed = query.trim()
+        if (typed.isNotEmpty() && results.none { it.equals(typed, ignoreCase = true) }) {
+            TextButton(
+                onClick = {
+                    onSelect(typed)
+                    query = ""
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    "Use “$typed” (add to catalog)",
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
 
         // Search hits — tapping one selects it and collapses the list.
         results.take(6).forEach { hit ->
