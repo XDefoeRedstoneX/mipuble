@@ -83,6 +83,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -161,6 +162,7 @@ fun LibraryScreen(
     var deletingBook by remember { mutableStateOf<Book?>(null) }
     var editingCategory by remember { mutableStateOf<Category?>(null) }
     var creatingCategory by remember { mutableStateOf(false) }
+    var showReview by remember { mutableStateOf(false) }
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -199,6 +201,22 @@ fun LibraryScreen(
             },
             onBookLongPress = { assigningBook = it },
             onReorder = viewModel::onReorder,
+            onReviewClick = { showReview = true },
+        )
+    }
+
+    // Close the sheet automatically once the queue is cleared.
+    LaunchedEffect(uiState.reviewQueue.isEmpty()) {
+        if (uiState.reviewQueue.isEmpty()) showReview = false
+    }
+
+    if (showReview && uiState.reviewQueue.isNotEmpty()) {
+        ReviewSheet(
+            books = uiState.reviewQueue,
+            onApplyAll = viewModel::onApplyAllReviews,
+            onSkip = viewModel::onDismissReview,
+            onSearch = viewModel::onSearchCatalog,
+            onDismiss = { showReview = false },
         )
     }
 
@@ -293,6 +311,32 @@ private fun UploadBanner(progress: UploadProgress) {
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+    }
+}
+
+/** A tappable banner prompting the user to confirm uncertain book names. */
+@Composable
+private fun ReviewBanner(count: Int, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .background(MaterialTheme.colorScheme.tertiaryContainer)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = if (count == 1) "1 book needs a name check" else "$count books need a name check",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "Review",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            fontWeight = FontWeight.Bold,
+        )
     }
 }
 
@@ -412,6 +456,7 @@ fun LibraryContent(
     onBookClick: (Book) -> Unit,
     onBookLongPress: (Book) -> Unit,
     onReorder: (List<Long>) -> Unit,
+    onReviewClick: () -> Unit = {},
 ) {
     val title = uiState.categories
         .firstOrNull { it.id == uiState.selectedCategoryId }?.name ?: "Library"
@@ -459,6 +504,9 @@ fun LibraryContent(
         ) {
             // Banner occupies its own row above the grid (not overlapping it).
             uiState.upload?.let { UploadBanner(it) }
+            if (uiState.reviewQueue.isNotEmpty()) {
+                ReviewBanner(count = uiState.reviewQueue.size, onClick = onReviewClick)
+            }
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     uiState.isLoading -> Unit

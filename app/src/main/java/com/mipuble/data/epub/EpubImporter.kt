@@ -5,6 +5,7 @@ import android.net.Uri
 import com.mipuble.data.local.BookDao
 import com.mipuble.data.local.BookEntity
 import com.mipuble.domain.model.ImportOutcome
+import com.mipuble.domain.repository.CatalogRepository
 import com.mipuble.domain.title.TitleNormalizer
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -27,27 +28,38 @@ class EpubImporter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val parser: EpubParser,
     private val bookDao: BookDao,
+    private val catalogRepository: CatalogRepository,
 ) {
 
-    /** Identity of an EPUB file: exact hash, cleaned title, and logical key. */
+    /** Identity of an EPUB file: exact hash, cleaned title, logical key, and catalog match. */
     data class Identity(
         val contentHash: String,
         val displayTitle: String,
         val author: String,
         val dedupKey: String?,
+        /** How a canonical-catalog match (if any) should be treated by the UI. */
+        val confidence: TitleNormalizer.MatchConfidence = TitleNormalizer.MatchConfidence.NONE,
+        /** Closest official names when [confidence] is REVIEW. */
+        val suggestions: List<String> = emptyList(),
     )
 
-    /** Computes a file's identity, preferring the EPUB's own title over the filename. */
-    fun identify(file: File, fallbackName: String): Identity {
+    /**
+     * Computes a file's identity, preferring the EPUB's own title over the
+     * filename and snapping the series to the official catalog when a confident
+     * match exists (which also unlocks bare-number volume splitting).
+     */
+    suspend fun identify(file: File, fallbackName: String): Identity {
         val epub = runCatching { parser.parse(file) }.getOrNull()
         val rawTitle = epub?.title?.takeIf { it.isNotBlank() }
             ?: fallbackName.substringAfterLast('/').ifBlank { file.nameWithoutExtension }
-        val normalized = TitleNormalizer.normalize(rawTitle)
+        val normalized = TitleNormalizer.normalize(rawTitle, catalogRepository.catalog())
         return Identity(
             contentHash = sha256(file),
             displayTitle = normalized.displayTitle,
             author = epub?.author?.takeIf { it.isNotBlank() } ?: "Unknown",
             dedupKey = normalized.dedupKey,
+            confidence = normalized.confidence,
+            suggestions = normalized.suggestions,
         )
     }
 
@@ -94,7 +106,8 @@ class EpubImporter @Inject constructor(
                     target.outputStream().use { input.copyTo(it) }
                 }
             }
-            finishImport(target, identify(target, fallbackName = assetName))
+            // The bundled sample is known-good; don't drop it into the review queue.
+            finishImport(target, identify(target, fallbackName = assetName), review = false)
         }
     }
 
@@ -114,8 +127,13 @@ class EpubImporter @Inject constructor(
         identity: Identity,
         remoteId: String? = null,
         remoteSize: Long? = null,
+        review: Boolean = true,
     ): Long {
         val epub = runCatching { parser.parse(file) }.getOrNull()
+        // Every user-added book is confirmed in the review sheet (with its best
+        // guess pre-selected) — only skipped when there's no catalog to match against.
+        val needsReview = review &&
+            identity.confidence != TitleNormalizer.MatchConfidence.NONE
         val id = bookDao.insert(
             BookEntity(
                 title = identity.displayTitle.ifBlank { file.nameWithoutExtension },
@@ -126,6 +144,8 @@ class EpubImporter @Inject constructor(
                 remoteSizeBytes = remoteSize,
                 contentHash = identity.contentHash,
                 dedupKey = identity.dedupKey,
+                needsReview = needsReview,
+                reviewSuggestions = identity.suggestions.takeIf { needsReview }?.joinToString("\n"),
             ),
         )
         // New books join the end of the hand-arranged order (ids are monotonic).

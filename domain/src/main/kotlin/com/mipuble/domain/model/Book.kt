@@ -25,6 +25,10 @@ data class Book(
     val remoteId: String? = null,
     /** Size of the remote file in bytes, for display before downloading. */
     val remoteSizeBytes: Long? = null,
+    /** True when the catalog match was uncertain and the title awaits the user's confirmation. */
+    val needsReview: Boolean = false,
+    /** Closest official names to offer in the review sheet (best first). */
+    val reviewSuggestions: List<String> = emptyList(),
 ) {
     /** Whether the book's bytes are on the device and it can be opened. */
     val isDownloaded: Boolean get() = filePath != null

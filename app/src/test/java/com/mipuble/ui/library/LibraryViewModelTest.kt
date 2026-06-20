@@ -13,14 +13,18 @@ import com.mipuble.domain.usecase.AssignBookCategoryUseCase
 import com.mipuble.domain.usecase.CreateCategoryUseCase
 import com.mipuble.domain.usecase.DeleteBookUseCase
 import com.mipuble.domain.usecase.DeleteCategoryUseCase
+import com.mipuble.domain.usecase.DismissReviewUseCase
 import com.mipuble.domain.usecase.DownloadBookUseCase
 import com.mipuble.domain.usecase.EvictBookUseCase
 import com.mipuble.domain.usecase.ImportEpubUseCase
 import com.mipuble.domain.usecase.ObserveCategoriesUseCase
 import com.mipuble.domain.usecase.ObserveDownloadsUseCase
 import com.mipuble.domain.usecase.ObserveLibraryUseCase
+import com.mipuble.domain.usecase.ObserveReviewQueueUseCase
 import com.mipuble.domain.usecase.ObserveUploadsUseCase
+import com.mipuble.domain.usecase.ResolveReviewUseCase
 import com.mipuble.domain.usecase.SaveCustomOrderUseCase
+import com.mipuble.domain.usecase.SearchCatalogUseCase
 import com.mipuble.domain.usecase.SyncRemoteLibraryUseCase
 import com.mipuble.domain.usecase.UpdateCategoryUseCase
 import com.mipuble.domain.model.ImportOutcome
@@ -67,6 +71,8 @@ class LibraryViewModelTest {
             savedOrder = orderedBookIds
         }
         override suspend fun rebuildMissingCovers(): Int = 0
+        override suspend fun applyCanonicalName(bookId: Long, canonicalSeries: String) = Unit
+        override suspend fun dismissReview(bookId: Long) = Unit
     }
 
     private class FakeCategoryRepository : CategoryRepository {
@@ -74,6 +80,11 @@ class LibraryViewModelTest {
         override suspend fun createCategory(name: String, colorArgb: Int): Long = 1L
         override suspend fun updateCategory(id: Long, name: String, colorArgb: Int) = Unit
         override suspend fun deleteCategory(id: Long) = Unit
+    }
+
+    private class FakeCatalogRepository : com.mipuble.domain.repository.CatalogRepository {
+        override suspend fun catalog() = com.mipuble.domain.title.SeriesCatalog(emptyList())
+        override suspend fun addSeries(name: String) = Unit
     }
 
     private class FakeRemoteRepository : RemoteLibraryRepository {
@@ -121,6 +132,10 @@ class LibraryViewModelTest {
             downloadBook = DownloadBookUseCase(remoteRepository),
             evictBook = EvictBookUseCase(remoteRepository),
             deleteBook = DeleteBookUseCase(remoteRepository),
+            observeReviewQueue = ObserveReviewQueueUseCase(bookRepository),
+            resolveReview = ResolveReviewUseCase(bookRepository, FakeCatalogRepository()),
+            dismissReview = DismissReviewUseCase(bookRepository),
+            searchCatalog = SearchCatalogUseCase(FakeCatalogRepository()),
             driveAuthProvider = UnconfiguredDriveAuthProvider(),
         )
     }

@@ -23,9 +23,13 @@ import com.mipuble.domain.usecase.EvictBookUseCase
 import com.mipuble.domain.usecase.ImportEpubUseCase
 import com.mipuble.domain.usecase.ObserveCategoriesUseCase
 import com.mipuble.domain.usecase.ObserveDownloadsUseCase
+import com.mipuble.domain.usecase.DismissReviewUseCase
 import com.mipuble.domain.usecase.ObserveLibraryUseCase
+import com.mipuble.domain.usecase.ObserveReviewQueueUseCase
 import com.mipuble.domain.usecase.ObserveUploadsUseCase
+import com.mipuble.domain.usecase.ResolveReviewUseCase
 import com.mipuble.domain.usecase.SaveCustomOrderUseCase
+import com.mipuble.domain.usecase.SearchCatalogUseCase
 import com.mipuble.domain.usecase.SyncRemoteLibraryUseCase
 import com.mipuble.domain.usecase.UpdateCategoryUseCase
 import com.mipuble.domain.usecase.UploadBooksToDriveUseCase
@@ -52,6 +56,8 @@ data class LibraryUiState(
     val isSyncing: Boolean = false,
     val upload: UploadProgress? = null,
     val pendingConsent: PendingIntent? = null,
+    /** Books whose catalog match was uncertain and await a name confirmation. */
+    val reviewQueue: List<Book> = emptyList(),
 ) {
     /**
      * Drag-and-drop only makes sense when looking at the full library in the
@@ -80,6 +86,10 @@ class LibraryViewModel @Inject constructor(
     private val downloadBook: DownloadBookUseCase,
     private val evictBook: EvictBookUseCase,
     private val deleteBook: DeleteBookUseCase,
+    observeReviewQueue: ObserveReviewQueueUseCase,
+    private val resolveReview: ResolveReviewUseCase,
+    private val dismissReview: DismissReviewUseCase,
+    private val searchCatalog: SearchCatalogUseCase,
     private val driveAuthProvider: DriveAuthProvider,
 ) : ViewModel() {
 
@@ -131,7 +141,8 @@ class LibraryViewModel @Inject constructor(
             libraryAndCategories,
             observeDownloads(),
             syncUploadConsent,
-        ) { (sort, category, data), downloads, (syncing, upload, consent) ->
+            observeReviewQueue(),
+        ) { (sort, category, data), downloads, (syncing, upload, consent), reviewQueue ->
             val (books, categories) = data
             LibraryUiState(
                 isLoading = false,
@@ -143,6 +154,7 @@ class LibraryViewModel @Inject constructor(
                 isSyncing = syncing,
                 upload = upload,
                 pendingConsent = consent,
+                reviewQueue = reviewQueue,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -310,6 +322,31 @@ class LibraryViewModel @Inject constructor(
                 .onFailure { e -> _messages.update { e.message ?: "Couldn't delete the book." } }
         }
     }
+
+    /** Confirms one reviewed book's official name (teaching the catalog any new name). */
+    fun onResolveReview(bookId: Long, canonicalSeries: String) {
+        val name = canonicalSeries.trim()
+        if (name.isEmpty()) return
+        viewModelScope.launch { resolveReview(bookId, name, addToCatalog = true) }
+    }
+
+    /** Confirms every reviewed book's selected name in one pass. */
+    fun onApplyAllReviews(selections: List<Pair<Long, String>>) {
+        val valid = selections.filter { it.second.isNotBlank() }
+        if (valid.isEmpty()) return
+        viewModelScope.launch {
+            valid.forEach { (bookId, name) -> resolveReview(bookId, name.trim(), addToCatalog = true) }
+            _messages.update { "Applied ${valid.size} name(s)." }
+        }
+    }
+
+    /** Keeps a reviewed book's current title and drops it from the queue. */
+    fun onDismissReview(bookId: Long) {
+        viewModelScope.launch { dismissReview(bookId) }
+    }
+
+    /** Looks up catalog names for the review sheet's per-book search box. */
+    suspend fun onSearchCatalog(query: String): List<String> = searchCatalog(query)
 
     fun onUnavailableBook() {
         _messages.update { "This book isn't downloaded yet." }

@@ -2,9 +2,11 @@ package com.mipuble.data.di
 
 import com.mipuble.data.preferences.ReaderPreferencesRepositoryImpl
 import com.mipuble.data.repository.BookRepositoryImpl
+import com.mipuble.data.repository.CatalogRepositoryImpl
 import com.mipuble.data.repository.CategoryRepositoryImpl
 import com.mipuble.data.repository.RemoteLibraryRepositoryImpl
 import com.mipuble.domain.repository.BookRepository
+import com.mipuble.domain.repository.CatalogRepository
 import com.mipuble.domain.repository.CategoryRepository
 import com.mipuble.domain.repository.ReaderPreferencesRepository
 import com.mipuble.domain.repository.RemoteLibraryRepository
@@ -32,4 +34,7 @@ abstract class RepositoryModule {
     abstract fun bindRemoteLibraryRepository(
         impl: RemoteLibraryRepositoryImpl,
     ): RemoteLibraryRepository
+
+    @Binds
+    abstract fun bindCatalogRepository(impl: CatalogRepositoryImpl): CatalogRepository
 }
