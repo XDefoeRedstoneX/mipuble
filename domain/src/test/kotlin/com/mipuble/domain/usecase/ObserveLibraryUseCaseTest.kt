@@ -44,6 +44,8 @@ class ObserveLibraryUseCaseTest {
         override suspend fun setBookCategory(bookId: Long, categoryId: Long?) = Unit
         override suspend fun saveCustomOrder(orderedBookIds: List<Long>) = Unit
         override suspend fun rebuildMissingCovers(): Int = 0
+        override suspend fun applyCanonicalName(bookId: Long, canonicalSeries: String) = Unit
+        override suspend fun dismissReview(bookId: Long) = Unit
     }
 
     private val useCase = ObserveLibraryUseCase(repositoryOf(library))

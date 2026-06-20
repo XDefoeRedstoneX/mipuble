@@ -33,6 +33,17 @@ interface BookDao {
     @Query("UPDATE books SET cover_path = :coverPath WHERE id = :id")
     suspend fun updateCover(id: Long, coverPath: String)
 
+    /** Confirms a reviewed book's title and clears the review flag. */
+    @Query(
+        "UPDATE books SET title = :title, dedup_key = :dedupKey, " +
+            "needs_review = 0, review_suggestions = NULL WHERE id = :id",
+    )
+    suspend fun applyReviewedTitle(id: Long, title: String, dedupKey: String?)
+
+    /** Clears the review flag, keeping the current title. */
+    @Query("UPDATE books SET needs_review = 0, review_suggestions = NULL WHERE id = :id")
+    suspend fun clearReview(id: Long)
+
     @Query("SELECT remote_id FROM books WHERE remote_id IS NOT NULL")
     suspend fun remoteIds(): List<String>
 

@@ -6,6 +6,7 @@ import com.mipuble.data.local.toDomain
 import com.mipuble.domain.model.Book
 import com.mipuble.domain.model.ImportOutcome
 import com.mipuble.domain.repository.BookRepository
+import com.mipuble.domain.title.TitleNormalizer
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,4 +43,16 @@ class BookRepositoryImpl @Inject constructor(
                 val file = File(entity.filePath!!)
                 file.exists() && importer.storeCover(entity.id, file)
             }
+
+    override suspend fun applyCanonicalName(bookId: Long, canonicalSeries: String) {
+        val book = bookDao.getById(bookId) ?: return
+        // Keep any volume already detected in the current title, but rebuild the
+        // series part from the confirmed official name.
+        val volume = TitleNormalizer.normalize(book.title).volume
+        val combined = if (volume != null) "$canonicalSeries, Vol. $volume" else canonicalSeries
+        val normalized = TitleNormalizer.normalize(combined)
+        bookDao.applyReviewedTitle(bookId, normalized.displayTitle, normalized.dedupKey)
+    }
+
+    override suspend fun dismissReview(bookId: Long) = bookDao.clearReview(bookId)
 }

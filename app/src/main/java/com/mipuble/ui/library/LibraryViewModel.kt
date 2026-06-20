@@ -23,8 +23,11 @@ import com.mipuble.domain.usecase.EvictBookUseCase
 import com.mipuble.domain.usecase.ImportEpubUseCase
 import com.mipuble.domain.usecase.ObserveCategoriesUseCase
 import com.mipuble.domain.usecase.ObserveDownloadsUseCase
+import com.mipuble.domain.usecase.DismissReviewUseCase
 import com.mipuble.domain.usecase.ObserveLibraryUseCase
+import com.mipuble.domain.usecase.ObserveReviewQueueUseCase
 import com.mipuble.domain.usecase.ObserveUploadsUseCase
+import com.mipuble.domain.usecase.ResolveReviewUseCase
 import com.mipuble.domain.usecase.SaveCustomOrderUseCase
 import com.mipuble.domain.usecase.SyncRemoteLibraryUseCase
 import com.mipuble.domain.usecase.UpdateCategoryUseCase
@@ -52,6 +55,8 @@ data class LibraryUiState(
     val isSyncing: Boolean = false,
     val upload: UploadProgress? = null,
     val pendingConsent: PendingIntent? = null,
+    /** Books whose catalog match was uncertain and await a name confirmation. */
+    val reviewQueue: List<Book> = emptyList(),
 ) {
     /**
      * Drag-and-drop only makes sense when looking at the full library in the
@@ -80,6 +85,9 @@ class LibraryViewModel @Inject constructor(
     private val downloadBook: DownloadBookUseCase,
     private val evictBook: EvictBookUseCase,
     private val deleteBook: DeleteBookUseCase,
+    observeReviewQueue: ObserveReviewQueueUseCase,
+    private val resolveReview: ResolveReviewUseCase,
+    private val dismissReview: DismissReviewUseCase,
     private val driveAuthProvider: DriveAuthProvider,
 ) : ViewModel() {
 
@@ -131,7 +139,8 @@ class LibraryViewModel @Inject constructor(
             libraryAndCategories,
             observeDownloads(),
             syncUploadConsent,
-        ) { (sort, category, data), downloads, (syncing, upload, consent) ->
+            observeReviewQueue(),
+        ) { (sort, category, data), downloads, (syncing, upload, consent), reviewQueue ->
             val (books, categories) = data
             LibraryUiState(
                 isLoading = false,
@@ -143,6 +152,7 @@ class LibraryViewModel @Inject constructor(
                 isSyncing = syncing,
                 upload = upload,
                 pendingConsent = consent,
+                reviewQueue = reviewQueue,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -309,6 +319,21 @@ class LibraryViewModel @Inject constructor(
                 }
                 .onFailure { e -> _messages.update { e.message ?: "Couldn't delete the book." } }
         }
+    }
+
+    /** Confirms a reviewed book's official name, optionally teaching the catalog. */
+    fun onResolveReview(bookId: Long, canonicalSeries: String, addToCatalog: Boolean) {
+        val name = canonicalSeries.trim()
+        if (name.isEmpty()) return
+        viewModelScope.launch {
+            resolveReview(bookId, name, addToCatalog)
+            _messages.update { "Renamed to \"$name\"." }
+        }
+    }
+
+    /** Keeps a reviewed book's current title and drops it from the queue. */
+    fun onDismissReview(bookId: Long) {
+        viewModelScope.launch { dismissReview(bookId) }
     }
 
     fun onUnavailableBook() {

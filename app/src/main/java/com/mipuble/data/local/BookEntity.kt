@@ -23,6 +23,10 @@ data class BookEntity(
     @ColumnInfo(name = "content_hash") val contentHash: String? = null,
     /** Normalized series|volume identity, for logical duplicate detection. */
     @ColumnInfo(name = "dedup_key") val dedupKey: String? = null,
+    /** Set when the catalog match was uncertain and the title awaits confirmation. */
+    @ColumnInfo(name = "needs_review") val needsReview: Boolean = false,
+    /** Newline-separated closest official names for the review sheet. */
+    @ColumnInfo(name = "review_suggestions") val reviewSuggestions: String? = null,
 )
 
 fun BookEntity.toDomain() = Book(
@@ -38,4 +42,6 @@ fun BookEntity.toDomain() = Book(
     customOrder = customOrder,
     remoteId = remoteId,
     remoteSizeBytes = remoteSizeBytes,
+    needsReview = needsReview,
+    reviewSuggestions = reviewSuggestions?.lines()?.filter { it.isNotBlank() } ?: emptyList(),
 )

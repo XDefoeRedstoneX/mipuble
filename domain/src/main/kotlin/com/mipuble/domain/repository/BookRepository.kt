@@ -39,4 +39,13 @@ interface BookRepository {
      * artwork for books imported before the cover-fallback logic existed.
      */
     suspend fun rebuildMissingCovers(): Int
+
+    /**
+     * Confirms a reviewed book's series as [canonicalSeries]: rebuilds its title
+     * (keeping any detected volume) and clears the review flag.
+     */
+    suspend fun applyCanonicalName(bookId: Long, canonicalSeries: String)
+
+    /** Keeps a reviewed book's current title as-is and clears the review flag. */
+    suspend fun dismissReview(bookId: Long)
 }

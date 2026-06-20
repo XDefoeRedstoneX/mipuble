@@ -7,7 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
     entities = [BookEntity::class, CategoryEntity::class],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class MipubleDatabase : RoomDatabase() {
@@ -60,6 +60,14 @@ abstract class MipubleDatabase : RoomDatabase() {
         val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE books ADD COLUMN dedup_key TEXT")
+            }
+        }
+
+        /** Adds the canonical-name review queue fields. */
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE books ADD COLUMN needs_review INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE books ADD COLUMN review_suggestions TEXT")
             }
         }
     }

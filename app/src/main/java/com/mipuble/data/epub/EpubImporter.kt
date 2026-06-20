@@ -128,6 +128,7 @@ class EpubImporter @Inject constructor(
         remoteSize: Long? = null,
     ): Long {
         val epub = runCatching { parser.parse(file) }.getOrNull()
+        val needsReview = identity.confidence == TitleNormalizer.MatchConfidence.REVIEW
         val id = bookDao.insert(
             BookEntity(
                 title = identity.displayTitle.ifBlank { file.nameWithoutExtension },
@@ -138,6 +139,8 @@ class EpubImporter @Inject constructor(
                 remoteSizeBytes = remoteSize,
                 contentHash = identity.contentHash,
                 dedupKey = identity.dedupKey,
+                needsReview = needsReview,
+                reviewSuggestions = identity.suggestions.takeIf { needsReview }?.joinToString("\n"),
             ),
         )
         // New books join the end of the hand-arranged order (ids are monotonic).
