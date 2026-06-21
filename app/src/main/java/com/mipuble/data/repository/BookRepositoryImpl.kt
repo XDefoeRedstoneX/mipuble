@@ -58,4 +58,7 @@ class BookRepositoryImpl @Inject constructor(
     }
 
     override suspend fun dismissReview(bookId: Long) = bookDao.clearReview(bookId)
+
+    override suspend fun markForReview(bookId: Long, suggestions: List<String>) =
+        bookDao.markForReview(bookId, suggestions.joinToString("\n").ifEmpty { null })
 }

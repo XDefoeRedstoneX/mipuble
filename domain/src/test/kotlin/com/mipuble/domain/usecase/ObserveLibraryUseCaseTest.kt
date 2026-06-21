@@ -46,6 +46,7 @@ class ObserveLibraryUseCaseTest {
         override suspend fun rebuildMissingCovers(): Int = 0
         override suspend fun applyCanonicalName(bookId: Long, canonicalSeries: String) = Unit
         override suspend fun dismissReview(bookId: Long) = Unit
+        override suspend fun markForReview(bookId: Long, suggestions: List<String>) = Unit
     }
 
     private val useCase = ObserveLibraryUseCase(repositoryOf(library))
@@ -109,6 +110,21 @@ class ObserveLibraryUseCaseTest {
             ),
             result.map { it.title },
         )
+    }
+
+    @Test
+    fun `author sort groups a series despite punctuation and mixed authors`() = runTest {
+        // Same series, written differently ("Re:Zero" vs "Re Zero") and with one
+        // volume tagged, one Unknown — must still stay together under one author.
+        val mixed = listOf(
+            book(1, "Re:Zero, Vol. 2", author = "Unknown"),
+            book(2, "Re Zero, Vol. 1", author = "Tappei"),
+        )
+        val useCase = ObserveLibraryUseCase(repositoryOf(mixed))
+
+        val result = useCase(BookSortOption.AUTHOR).first()
+
+        assertEquals(listOf("Re Zero, Vol. 1", "Re:Zero, Vol. 2"), result.map { it.title })
     }
 
     @Test

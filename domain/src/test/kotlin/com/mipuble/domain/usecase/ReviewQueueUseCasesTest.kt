@@ -43,6 +43,10 @@ class ReviewQueueUseCasesTest {
         override suspend fun dismissReview(bookId: Long) {
             dismissed = bookId
         }
+        val marked = mutableListOf<Pair<Long, List<String>>>()
+        override suspend fun markForReview(bookId: Long, suggestions: List<String>) {
+            marked += bookId to suggestions
+        }
     }
 
     private class FakeCatalogRepository : CatalogRepository {
@@ -82,6 +86,15 @@ class ReviewQueueUseCasesTest {
 
         assertTrue(catalog.added.isEmpty())
         assertEquals(7L to "Berserk", repo.applied)
+    }
+
+    @Test
+    fun `queueing existing books marks each one for review`() = runTest {
+        val repo = FakeBookRepository(listOf(book(1, false), book(2, false)))
+
+        QueueBooksForReviewUseCase(repo, FakeCatalogRepository())(listOf(1L, 2L))
+
+        assertEquals(listOf(1L, 2L), repo.marked.map { it.first })
     }
 
     @Test

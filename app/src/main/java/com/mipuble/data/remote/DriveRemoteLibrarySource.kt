@@ -47,7 +47,24 @@ class DriveRemoteLibrarySource @Inject constructor(
         }
     }
 
-    override suspend fun fetchCover(remoteId: String): ByteArray? = null
+    override suspend fun fetchCover(remoteId: String): ByteArray? {
+        val token = token() ?: return null
+        // Best effort: use Drive's own generated thumbnail so a metadata-only
+        // book shows a cover before it's ever downloaded. Returns null (and the
+        // UI falls back to a placeholder) when Drive has no thumbnail.
+        val metaUrl = "$BASE/files/$remoteId?fields=hasThumbnail,thumbnailLink"
+        val meta = client.newCall(
+            Request.Builder().url(metaUrl).header("Authorization", "Bearer $token").build(),
+        ).execute().use { response ->
+            if (!response.isSuccessful) return null
+            JSONObject(response.body?.string().orEmpty())
+        }
+        if (!meta.optBoolean("hasThumbnail", false)) return null
+        val link = meta.optString("thumbnailLink").takeIf { it.isNotEmpty() } ?: return null
+        return client.newCall(
+            Request.Builder().url(link).header("Authorization", "Bearer $token").build(),
+        ).execute().use { response -> if (response.isSuccessful) response.body?.bytes() else null }
+    }
 
     override suspend fun download(remoteId: String, target: File, onProgress: (read: Long, total: Long?) -> Unit) {
         val token = token() ?: error("Not signed in to Drive")

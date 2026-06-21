@@ -44,6 +44,10 @@ interface BookDao {
     @Query("UPDATE books SET needs_review = 0, review_suggestions = NULL WHERE id = :id")
     suspend fun clearReview(id: Long)
 
+    /** Flags an existing book for name review with freshly-computed suggestions. */
+    @Query("UPDATE books SET needs_review = 1, review_suggestions = :suggestions WHERE id = :id")
+    suspend fun markForReview(id: Long, suggestions: String?)
+
     @Query("SELECT remote_id FROM books WHERE remote_id IS NOT NULL")
     suspend fun remoteIds(): List<String>
 

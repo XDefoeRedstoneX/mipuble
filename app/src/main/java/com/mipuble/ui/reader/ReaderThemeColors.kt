@@ -78,13 +78,17 @@ private fun fontCss(font: ReaderFont): String {
  * page through it; vertical overflow is what spills into the next column.
  */
 private const val PAGED_CSS = """
-    html { overflow-y: hidden !important; }
+    /* Clip vertical scrolling on the document, but let the body's columns
+       overflow horizontally so the WebView's horizontal scroll range grows —
+       that range is what the pager scrolls through. (A previous `overflow:
+       hidden` on the body clipped the columns, leaving range 0 so every swipe
+       jumped a chapter.) */
+    html { height: 100vh !important; overflow-y: hidden !important; }
     body {
-        height: 96vh !important;
+        height: 100vh !important;
         column-width: 100vw !important;
         column-gap: 0 !important;
         column-fill: auto !important;
-        overflow: hidden !important;
         box-sizing: border-box !important;
     }
 """
@@ -107,7 +111,12 @@ fun readerOverrideCss(preferences: ReaderPreferences): String {
         body { line-height: $lineHeight !important; padding: 2vh 6% !important; margin: 0 !important; }
         p, li, div, span { color: $fg !important; }
         a { color: $link !important; }
-        img, svg { max-width: 100% !important; height: auto !important; }
+        img, svg {
+            max-width: 100% !important;
+            max-height: 100vh !important;
+            height: auto !important;
+            object-fit: contain !important;
+        }
         ${fontCss(preferences.font)}
         $paged
     """.trimIndent()
