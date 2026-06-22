@@ -48,4 +48,7 @@ interface BookRepository {
 
     /** Keeps a reviewed book's current title as-is and clears the review flag. */
     suspend fun dismissReview(bookId: Long)
+
+    /** Flags an already-imported book for name review with the given suggestions. */
+    suspend fun markForReview(bookId: Long, suggestions: List<String>)
 }

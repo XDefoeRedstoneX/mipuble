@@ -5,6 +5,7 @@ import com.mipuble.domain.repository.BookRepository
 import com.mipuble.domain.sort.BookSortOption
 import com.mipuble.domain.sort.NaturalOrderComparator
 import com.mipuble.domain.sort.comparator
+import com.mipuble.domain.title.StringSimilarity
 import com.mipuble.domain.title.TitleNormalizer
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
@@ -39,14 +40,17 @@ class ObserveLibraryUseCase @Inject constructor(
      */
     private fun List<Book>.sortedBySeriesAuthor(): List<Book> {
         val natural = NaturalOrderComparator()
-        val seriesKey = { book: Book -> TitleNormalizer.normalize(book.title).series.lowercase().trim() }
+        // Collapse the series to a punctuation/space-insensitive key so volumes
+        // titled slightly differently ("Re:Zero" vs "Re Zero") still group — the
+        // same canonicalization dedup uses.
+        val seriesKey = { book: Book -> StringSimilarity.collapse(TitleNormalizer.normalize(book.title).series) }
 
         val canonicalAuthor: Map<String, String> = this
             .groupBy(seriesKey)
             .mapValues { (_, books) ->
                 books.map { it.author }
                     .firstOrNull { it.isNotBlank() && !it.equals("Unknown", ignoreCase = true) }
-                    ?: books.first().author
+                    ?: "Unknown" // stable sentinel so blank and "Unknown" don't sort differently
             }
 
         val byAuthor = compareBy<Book, String>(natural) { canonicalAuthor[seriesKey(it)] ?: it.author }

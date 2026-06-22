@@ -83,6 +83,17 @@ class TitleNormalizerTest {
     }
 
     @Test
+    fun `volumeForConfirmed recovers a bare trailing volume once the series is known`() {
+        // The review-confirm path: the series is settled, so a bare number is a volume.
+        assertEquals(12, TitleNormalizer.volumeForConfirmed("Bleach 12", "Bleach"))
+        assertEquals(4, TitleNormalizer.volumeForConfirmed("Spice and Wolf, Vol. 4", "Spice and Wolf"))
+        // A number that's part of the official name is not a volume.
+        assertNull(TitleNormalizer.volumeForConfirmed("Mob Psycho 100", "Mob Psycho 100"))
+        // A volume-less standalone stays volume-less.
+        assertNull(TitleNormalizer.volumeForConfirmed("Piranesi", "Piranesi"))
+    }
+
+    @Test
     fun `titles ending in a number are not mangled into volumes`() {
         val a = TitleNormalizer.normalize("Fahrenheit 451")
         assertNull(a.volume)

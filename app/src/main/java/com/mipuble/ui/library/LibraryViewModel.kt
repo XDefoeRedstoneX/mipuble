@@ -27,6 +27,7 @@ import com.mipuble.domain.usecase.DismissReviewUseCase
 import com.mipuble.domain.usecase.ObserveLibraryUseCase
 import com.mipuble.domain.usecase.ObserveReviewQueueUseCase
 import com.mipuble.domain.usecase.ObserveUploadsUseCase
+import com.mipuble.domain.usecase.QueueBooksForReviewUseCase
 import com.mipuble.domain.usecase.ResolveReviewUseCase
 import com.mipuble.domain.usecase.SaveCustomOrderUseCase
 import com.mipuble.domain.usecase.SearchCatalogUseCase
@@ -58,6 +59,9 @@ data class LibraryUiState(
     val pendingConsent: PendingIntent? = null,
     /** Books whose catalog match was uncertain and await a name confirmation. */
     val reviewQueue: List<Book> = emptyList(),
+    /** Multi-select mode for picking books to review by name. */
+    val selectionMode: Boolean = false,
+    val selectedBookIds: Set<Long> = emptySet(),
 ) {
     /**
      * Drag-and-drop only makes sense when looking at the full library in the
@@ -90,8 +94,12 @@ class LibraryViewModel @Inject constructor(
     private val resolveReview: ResolveReviewUseCase,
     private val dismissReview: DismissReviewUseCase,
     private val searchCatalog: SearchCatalogUseCase,
+    private val queueBooksForReview: QueueBooksForReviewUseCase,
     private val driveAuthProvider: DriveAuthProvider,
 ) : ViewModel() {
+
+    private val selectionMode = MutableStateFlow(false)
+    private val selectedBookIds = MutableStateFlow<Set<Long>>(emptySet())
 
     private val sortOption = MutableStateFlow(BookSortOption.TITLE_NATURAL)
     private val selectedCategoryId = MutableStateFlow<Long?>(null)
@@ -136,13 +144,17 @@ class LibraryViewModel @Inject constructor(
             Triple(syncing, upload, consent)
         }
 
+    private val selectionState =
+        combine(selectionMode, selectedBookIds) { mode, ids -> mode to ids }
+
     val uiState: StateFlow<LibraryUiState> =
         combine(
             libraryAndCategories,
             observeDownloads(),
             syncUploadConsent,
             observeReviewQueue(),
-        ) { (sort, category, data), downloads, (syncing, upload, consent), reviewQueue ->
+            selectionState,
+        ) { (sort, category, data), downloads, (syncing, upload, consent), reviewQueue, (selMode, selIds) ->
             val (books, categories) = data
             LibraryUiState(
                 isLoading = false,
@@ -155,6 +167,8 @@ class LibraryViewModel @Inject constructor(
                 upload = upload,
                 pendingConsent = consent,
                 reviewQueue = reviewQueue,
+                selectionMode = selMode,
+                selectedBookIds = selIds,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -323,19 +337,12 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    /** Confirms one reviewed book's official name (teaching the catalog any new name). */
-    fun onResolveReview(bookId: Long, canonicalSeries: String) {
-        val name = canonicalSeries.trim()
-        if (name.isEmpty()) return
-        viewModelScope.launch { resolveReview(bookId, name, addToCatalog = true) }
-    }
-
     /** Confirms every reviewed book's selected name in one pass. */
-    fun onApplyAllReviews(selections: List<Pair<Long, String>>) {
-        val valid = selections.filter { it.second.isNotBlank() }
+    fun onApplyAllReviews(decisions: List<ReviewDecision>) {
+        val valid = decisions.filter { it.name.isNotBlank() }
         if (valid.isEmpty()) return
         viewModelScope.launch {
-            valid.forEach { (bookId, name) -> resolveReview(bookId, name.trim(), addToCatalog = true) }
+            valid.forEach { resolveReview(it.bookId, it.name.trim(), it.addToCatalog) }
             _messages.update { "Applied ${valid.size} name(s)." }
         }
     }
@@ -347,6 +354,40 @@ class LibraryViewModel @Inject constructor(
 
     /** Looks up catalog names for the review sheet's per-book search box. */
     suspend fun onSearchCatalog(query: String): List<String> = searchCatalog(query)
+
+    /** Queues the whole current view for name review. */
+    fun onReviewAll() {
+        val ids = uiState.value.books.map { it.id }
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            queueBooksForReview(ids)
+            _messages.update { "Queued ${ids.size} book(s) for name review." }
+        }
+    }
+
+    fun onEnterSelection() {
+        selectionMode.value = true
+    }
+
+    fun onExitSelection() {
+        selectionMode.value = false
+        selectedBookIds.value = emptySet()
+    }
+
+    fun onToggleSelected(bookId: Long) {
+        selectedBookIds.update { if (bookId in it) it - bookId else it + bookId }
+    }
+
+    /** Queues only the multi-selected books for review, then leaves selection mode. */
+    fun onReviewSelected() {
+        val ids = selectedBookIds.value.toList()
+        onExitSelection()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            queueBooksForReview(ids)
+            _messages.update { "Queued ${ids.size} book(s) for name review." }
+        }
+    }
 
     fun onUnavailableBook() {
         _messages.update { "This book isn't downloaded yet." }

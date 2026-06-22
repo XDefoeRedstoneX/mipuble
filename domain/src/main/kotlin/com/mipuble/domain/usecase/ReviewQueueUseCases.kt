@@ -3,6 +3,7 @@ package com.mipuble.domain.usecase
 import com.mipuble.domain.model.Book
 import com.mipuble.domain.repository.BookRepository
 import com.mipuble.domain.repository.CatalogRepository
+import com.mipuble.domain.title.TitleNormalizer
 import javax.inject.Inject
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -42,4 +43,24 @@ class SearchCatalogUseCase @Inject constructor(
 ) {
     suspend operator fun invoke(query: String, limit: Int = 10): List<String> =
         repository.catalog().search(query, limit)
+}
+
+/**
+ * Queues already-imported books for name review, recomputing each one's closest
+ * catalog suggestions from its current title — so books added before naming (or
+ * synced metadata-only from Drive) can be named too.
+ */
+class QueueBooksForReviewUseCase @Inject constructor(
+    private val bookRepository: BookRepository,
+    private val catalogRepository: CatalogRepository,
+) {
+    suspend operator fun invoke(bookIds: List<Long>) {
+        if (bookIds.isEmpty()) return
+        val catalog = catalogRepository.catalog()
+        bookIds.forEach { id ->
+            val book = bookRepository.getBook(id) ?: return@forEach
+            val suggestions = TitleNormalizer.normalize(book.title, catalog).suggestions
+            bookRepository.markForReview(id, suggestions)
+        }
+    }
 }

@@ -36,6 +36,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Menu
@@ -176,6 +177,15 @@ fun LibraryScreen(
                 },
                 onEdit = { editingCategory = it },
                 onCreate = { creatingCategory = true },
+                onReviewAll = {
+                    scope.launch { drawerState.close() }
+                    viewModel.onReviewAll()
+                    showReview = true
+                },
+                onSelectToReview = {
+                    scope.launch { drawerState.close() }
+                    viewModel.onEnterSelection()
+                },
                 onOpenSettings = {
                     scope.launch { drawerState.close() }
                     onOpenSettings()
@@ -202,6 +212,12 @@ fun LibraryScreen(
             onBookLongPress = { assigningBook = it },
             onReorder = viewModel::onReorder,
             onReviewClick = { showReview = true },
+            onExitSelection = viewModel::onExitSelection,
+            onReviewSelected = {
+                viewModel.onReviewSelected()
+                showReview = true
+            },
+            onToggleSelected = viewModel::onToggleSelected,
         )
     }
 
@@ -373,6 +389,8 @@ private fun CategoryDrawer(
     onSelect: (Long?) -> Unit,
     onEdit: (Category) -> Unit,
     onCreate: () -> Unit,
+    onReviewAll: () -> Unit,
+    onSelectToReview: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     ModalDrawerSheet {
@@ -432,6 +450,20 @@ private fun CategoryDrawer(
             modifier = Modifier.padding(horizontal = 12.dp),
         )
         NavigationDrawerItem(
+            label = { Text("Review book names") },
+            icon = { Icon(Icons.Default.Edit, contentDescription = null) },
+            selected = false,
+            onClick = onReviewAll,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        NavigationDrawerItem(
+            label = { Text("Select books to review") },
+            icon = { Icon(Icons.Default.Check, contentDescription = null) },
+            selected = false,
+            onClick = onSelectToReview,
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        NavigationDrawerItem(
             label = { Text("Settings") },
             icon = { Icon(Icons.Default.Settings, contentDescription = null) },
             selected = false,
@@ -457,38 +489,58 @@ fun LibraryContent(
     onBookLongPress: (Book) -> Unit,
     onReorder: (List<Long>) -> Unit,
     onReviewClick: () -> Unit = {},
+    onExitSelection: () -> Unit = {},
+    onReviewSelected: () -> Unit = {},
+    onToggleSelected: (Long) -> Unit = {},
 ) {
     val title = uiState.categories
         .firstOrNull { it.id == uiState.selectedCategoryId }?.name ?: "Library"
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                navigationIcon = {
-                    IconButton(onClick = onOpenDrawer) {
-                        Icon(Icons.Default.Menu, contentDescription = "Open categories")
-                    }
-                },
-                actions = {
-                    UploadMenu(
-                        enabled = uiState.upload == null,
-                        onFiles = onUploadFiles,
-                        onFolder = onUploadFolder,
-                    )
-                    IconButton(onClick = onSync, enabled = !uiState.isSyncing) {
-                        if (uiState.isSyncing) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(22.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        } else {
-                            Icon(Icons.Default.Refresh, contentDescription = "Sync remote library")
+            if (uiState.selectionMode) {
+                TopAppBar(
+                    title = { Text("${uiState.selectedBookIds.size} selected") },
+                    navigationIcon = {
+                        IconButton(onClick = onExitSelection) {
+                            Icon(Icons.Default.Close, contentDescription = "Cancel selection")
                         }
-                    }
-                    SortMenu(selected = uiState.sortOption, onSortSelected = onSortSelected)
-                },
-            )
+                    },
+                    actions = {
+                        TextButton(
+                            onClick = onReviewSelected,
+                            enabled = uiState.selectedBookIds.isNotEmpty(),
+                        ) { Text("Review") }
+                    },
+                )
+            } else {
+                TopAppBar(
+                    title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    navigationIcon = {
+                        IconButton(onClick = onOpenDrawer) {
+                            Icon(Icons.Default.Menu, contentDescription = "Open categories")
+                        }
+                    },
+                    actions = {
+                        UploadMenu(
+                            enabled = uiState.upload == null,
+                            onFiles = onUploadFiles,
+                            onFolder = onUploadFolder,
+                        )
+                        IconButton(onClick = onSync, enabled = !uiState.isSyncing) {
+                            if (uiState.isSyncing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(Icons.Default.Refresh, contentDescription = "Sync remote library")
+                            }
+                        }
+                        SortMenu(selected = uiState.sortOption, onSortSelected = onSortSelected)
+                    },
+                )
+            }
         },
         floatingActionButton = {
             FloatingActionButton(onClick = onImportClick) {
@@ -530,6 +582,7 @@ fun LibraryContent(
                         onBookClick = onBookClick,
                         onBookLongPress = onBookLongPress,
                         onReorder = onReorder,
+                        onToggleSelected = onToggleSelected,
                     )
                 }
             }
@@ -550,6 +603,7 @@ private fun BookGrid(
     onBookClick: (Book) -> Unit,
     onBookLongPress: (Book) -> Unit,
     onReorder: (List<Long>) -> Unit,
+    onToggleSelected: (Long) -> Unit,
 ) {
     val gridState = rememberLazyGridState()
     val localBooks = remember(uiState.books) { uiState.books.toMutableStateList() }
@@ -583,17 +637,23 @@ private fun BookGrid(
                 book = book,
                 category = uiState.categories.firstOrNull { it.id == book.categoryId },
                 downloadStatus = uiState.downloads[book.id],
+                selectionMode = uiState.selectionMode,
+                isSelected = book.id in uiState.selectedBookIds,
                 modifier = Modifier
                     .reorderableItem(dragState, index)
                     .then(
-                        if (uiState.isReorderingEnabled) {
+                        when {
+                            // Selecting books to review: taps toggle, no long-press.
+                            uiState.selectionMode ->
+                                Modifier.combinedClickable(onClick = { onToggleSelected(book.id) })
                             // Taps still open; long-press is claimed by the drag.
-                            Modifier.combinedClickable(onClick = { onBookClick(book) })
-                        } else {
-                            Modifier.combinedClickable(
-                                onClick = { onBookClick(book) },
-                                onLongClick = { onBookLongPress(book) },
-                            )
+                            uiState.isReorderingEnabled ->
+                                Modifier.combinedClickable(onClick = { onBookClick(book) })
+                            else ->
+                                Modifier.combinedClickable(
+                                    onClick = { onBookClick(book) },
+                                    onLongClick = { onBookLongPress(book) },
+                                )
                         },
                     ),
             )
@@ -894,6 +954,8 @@ private fun BookCard(
     category: Category?,
     downloadStatus: DownloadStatus?,
     modifier: Modifier = Modifier,
+    selectionMode: Boolean = false,
+    isSelected: Boolean = false,
 ) {
     Column(
         // Not-yet-downloaded books read as dimmed until their bytes arrive.
@@ -936,6 +998,42 @@ private fun BookCard(
             }
 
             DownloadOverlay(book = book, status = downloadStatus)
+
+            // Multi-select affordance: a tick on chosen books, a dim wash on the rest.
+            if (selectionMode) {
+                if (isSelected) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.30f)),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primary),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Default.Check,
+                            contentDescription = "Selected",
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .size(24.dp)
+                            .clip(CircleShape)
+                            .background(Color.Black.copy(alpha = 0.35f)),
+                    )
+                }
+            }
         }
         if (book.progress > 0f) {
             LinearProgressIndicator(

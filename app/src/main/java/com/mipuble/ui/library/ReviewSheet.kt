@@ -29,7 +29,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -42,24 +41,24 @@ import kotlinx.coroutines.delay
  * Post-import confirmation. Every newly added book is listed with its best-guess
  * official name pre-selected; the user can switch to another close suggestion,
  * or search the full catalog per book. "Apply all" confirms every row's
- * selection at once (and teaches the catalog any new names); a row can be
- * skipped to keep its imported title.
+ * selection at once (teaching the catalog any name the user actually picked); a
+ * row can be skipped to keep its imported title.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReviewSheet(
     books: List<Book>,
-    onApplyAll: (List<Pair<Long, String>>) -> Unit,
+    onApplyAll: (List<ReviewDecision>) -> Unit,
     onSkip: (bookId: Long) -> Unit,
     onSearch: suspend (String) -> List<String>,
     onDismiss: () -> Unit,
 ) {
-    // Per-book chosen name, defaulting to the top suggestion (or the imported
-    // title when nothing matched). Survives recomposition as rows scroll.
-    val selections: SnapshotStateMap<Long, String> = remember { mutableStateMapOf() }
-    books.forEach { book ->
-        selections.getOrPut(book.id) { book.reviewSuggestions.firstOrNull() ?: book.title }
-    }
+    // Per-book *overrides* only — the default (top suggestion, else the imported
+    // title) is derived read-only, so nothing is written to state during
+    // composition.
+    val overrides = remember { mutableStateMapOf<Long, String>() }
+    fun selectedFor(book: Book) =
+        overrides[book.id] ?: book.reviewSuggestions.firstOrNull() ?: book.title
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.padding(horizontal = 20.dp)) {
@@ -79,7 +78,17 @@ fun ReviewSheet(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Button(
-                    onClick = { onApplyAll(books.map { it.id to (selections[it.id] ?: it.title) }) },
+                    onClick = {
+                        onApplyAll(
+                            books.map { book ->
+                                val name = selectedFor(book)
+                                // Only teach the catalog a name the user actually
+                                // chose — never the messy imported title left as the
+                                // fallback when nothing matched.
+                                ReviewDecision(book.id, name, addToCatalog = name != book.title)
+                            },
+                        )
+                    },
                 ) { Text("Apply all (${books.size})") }
                 TextButton(onClick = onDismiss) { Text("Later") }
             }
@@ -90,8 +99,8 @@ fun ReviewSheet(
                 items(books, key = { it.id }) { book ->
                     ReviewRow(
                         book = book,
-                        selected = selections[book.id] ?: book.title,
-                        onSelect = { selections[book.id] = it },
+                        selected = selectedFor(book),
+                        onSelect = { overrides[book.id] = it },
                         onSkip = { onSkip(book.id) },
                         onSearch = onSearch,
                     )
@@ -102,6 +111,9 @@ fun ReviewSheet(
         }
     }
 }
+
+/** One book's confirmed name and whether to add it to the writable catalog. */
+data class ReviewDecision(val bookId: Long, val name: String, val addToCatalog: Boolean)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -157,10 +169,30 @@ private fun ReviewRow(
         OutlinedTextField(
             value = query,
             onValueChange = { query = it },
-            label = { Text("Search the catalog") },
+            label = { Text("Search, or type a new name") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
+
+        // Let the user commit a brand-new official name (taught to the catalog on
+        // apply) when the catalog has nothing matching what they typed.
+        val typed = query.trim()
+        if (typed.isNotEmpty() && results.none { it.equals(typed, ignoreCase = true) }) {
+            TextButton(
+                onClick = {
+                    onSelect(typed)
+                    query = ""
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    "Use “$typed” (add to catalog)",
+                    modifier = Modifier.fillMaxWidth(),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
 
         // Search hits — tapping one selects it and collapses the list.
         results.take(6).forEach { hit ->

@@ -41,6 +41,15 @@ class SeriesCatalogTest {
     }
 
     @Test
+    fun `a word merely embedded in the query does not force a match`() {
+        // "air" sits inside "repair"; the merged-word rule must not match
+        // "Air Gear" highly for an unrelated "Repair Gear Manual".
+        val c = SeriesCatalog(listOf("Air Gear"))
+        val m = c.match("Repair Gear Manual")
+        assertTrue("score ${m?.score}", m!!.score < 0.7f)
+    }
+
+    @Test
     fun `unrelated query does not score highly`() {
         val m = catalog.match("Completely Unrelated Thing")
         assertNotNull(m) // a closest match is always offered…

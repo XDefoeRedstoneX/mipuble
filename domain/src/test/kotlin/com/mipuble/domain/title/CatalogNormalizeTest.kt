@@ -46,21 +46,40 @@ class CatalogNormalizeTest {
     }
 
     @Test
+    fun `a digit inside the official name does not block a real trailing volume`() {
+        // "86―EIGHTY-SIX" contains '8' and '6', but neither is a standalone "6";
+        // a trailing "6" is still a genuine volume.
+        val c = SeriesCatalog(listOf("86―EIGHTY-SIX"))
+        val n = TitleNormalizer.normalize("86―EIGHTY-SIX 6", c)
+        assertEquals(MatchConfidence.AUTO, n.confidence)
+        assertEquals(6, n.volume)
+    }
+
+    @Test
     fun `unknown title with a trailing number is not mangled and goes to review`() {
         // "Fahrenheit 451" isn't in the catalog, so it must NOT auto-rename and
         // must NOT treat 451 as a volume.
         val n = TitleNormalizer.normalize("Fahrenheit 451", catalog)
         assertNull(n.volume)
         assertEquals(MatchConfidence.REVIEW, n.confidence)
-        assertTrue(n.suggestions.isNotEmpty())
     }
 
     @Test
-    fun `weak match keeps the cleaned original but offers suggestions`() {
+    fun `a wholly unrelated title is reviewed but offers no weak suggestions`() {
+        // Nothing in the catalog is close, so we don't pre-select a wrong name;
+        // the row keeps the original and lets the user search.
         val n = TitleNormalizer.normalize("Totally Made Up Series", catalog)
         assertEquals("Totally Made Up Series", n.series)
         assertEquals(MatchConfidence.REVIEW, n.confidence)
-        assertTrue(n.suggestions.isNotEmpty())
+        assertTrue(n.suggestions.isEmpty())
+    }
+
+    @Test
+    fun `a near-miss is reviewed and does offer suggestions`() {
+        // Close enough to clear the suggestion floor without being auto-confident.
+        val n = TitleNormalizer.normalize("Mob Psych", catalog)
+        assertEquals(MatchConfidence.REVIEW, n.confidence)
+        assertTrue(n.suggestions.contains("Mob Psycho 100"))
     }
 
     @Test
