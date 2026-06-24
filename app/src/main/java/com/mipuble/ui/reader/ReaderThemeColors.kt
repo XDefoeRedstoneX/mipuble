@@ -111,12 +111,7 @@ fun readerOverrideCss(preferences: ReaderPreferences): String {
         body { line-height: $lineHeight !important; padding: 2vh 6% !important; margin: 0 !important; }
         p, li, div, span { color: $fg !important; }
         a { color: $link !important; }
-        img, svg {
-            max-width: 100% !important;
-            max-height: 100vh !important;
-            height: auto !important;
-            object-fit: contain !important;
-        }
+        img, svg { max-width: 100% !important; height: auto !important; }
         ${fontCss(preferences.font)}
         $paged
     """.trimIndent()
