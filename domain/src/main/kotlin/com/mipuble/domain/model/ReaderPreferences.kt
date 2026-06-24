@@ -46,4 +46,6 @@ data class ReaderPreferences(
     val followSystemBrightness: Boolean = true,
     val font: ReaderFont = ReaderFont.BOOK,
     val pageTurnMode: PageTurnMode = PageTurnMode.SCROLL,
+    /** When true, confirming a book's name files it into a per-series shelf (category). */
+    val autoShelveBySeries: Boolean = false,
 )

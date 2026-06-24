@@ -37,6 +37,7 @@ class ReaderPreferencesRepositoryImpl @Inject constructor(
             pageTurnMode = prefs[Keys.PAGE_TURN]
                 ?.let { runCatching { PageTurnMode.valueOf(it) }.getOrNull() }
                 ?: PageTurnMode.SCROLL,
+            autoShelveBySeries = prefs[Keys.AUTO_SHELVE] ?: false,
         )
     }
 
@@ -72,6 +73,10 @@ class ReaderPreferencesRepositoryImpl @Inject constructor(
         dataStore.edit { it[Keys.PAGE_TURN] = mode.name }
     }
 
+    override suspend fun setAutoShelveBySeries(enabled: Boolean) {
+        dataStore.edit { it[Keys.AUTO_SHELVE] = enabled }
+    }
+
     private object Keys {
         val THEME = stringPreferencesKey("reader_theme")
         val FONT_SCALE = intPreferencesKey("reader_font_scale")
@@ -80,5 +85,6 @@ class ReaderPreferencesRepositoryImpl @Inject constructor(
         val FOLLOW_SYSTEM = booleanPreferencesKey("reader_follow_system_brightness")
         val FONT = stringPreferencesKey("reader_font")
         val PAGE_TURN = stringPreferencesKey("reader_page_turn")
+        val AUTO_SHELVE = booleanPreferencesKey("auto_shelve_by_series")
     }
 }
