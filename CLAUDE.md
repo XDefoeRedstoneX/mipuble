@@ -82,3 +82,26 @@ CI (`.github/workflows/ci.yml`) runs lint + unit tests + assembleDebug on every 
   `domain` extracted to a pure-JVM `:domain` Gradle module (boundary now
   enforced, not conventional). LibraryViewModel covered by JVM tests via a
   `MainDispatcherRule`; README gained a from-zero install guide.
+
+## Backlog (deferred — do not implement until asked)
+
+UI/perf:
+- Bookmark (category) sidebar scroll is laggy — needs a performance look at the drawer's category list.
+- `AssignCategoryDialog` ("add book to bookmark") needs a scroll container — a long category list overflows and can't be reached.
+
+Dedup:
+- Duplicates that share the same name OR the same volume but have different
+  translators are NOT deduplicated. Current dedup is content-hash OR
+  `series|volume` key; revisit so differently-translated copies of the same
+  volume collapse.
+
+Volume numbering:
+- Support decimal/comma volume numbers (e.g. "Vol 1.5"). Volume is currently an
+  `Int` in `TitleNormalizer`/`Book`/dedup key — needs to allow fractional
+  chapters/side-volumes.
+
+Manual rename (follows from decimal volumes):
+- A manual "Rename book" flow: select a book → popup that splits the title into
+  separate [series name] | [volume number] fields → enter → with an
+  "add to bookmark" check. (Like the review sheet but explicit name+volume split,
+  invokable on demand per book.)
