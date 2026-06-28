@@ -105,3 +105,13 @@ Manual rename (follows from decimal volumes):
   separate [series name] | [volume number] fields → enter → with an
   "add to bookmark" check. (Like the review sheet but explicit name+volume split,
   invokable on demand per book.)
+
+Reader:
+- Page count should reflect the EPUB's real page count, not a converted/derived
+  number.
+- Swipe (paged) page-turn is broken: the `PAGED_CSS` column layout renders the
+  whole chapter as 1–2 lines that run off-screen horizontally, consuming the
+  entire page count until it's no longer scrollable. Paged mode has been fragile
+  across several attempts (`PAGED_CSS` in `ReaderThemeColors.kt` + paging/scroll
+  logic in `ReaderScreen.kt`) — needs a proper, device-tested rework, not another
+  blind CSS tweak.
