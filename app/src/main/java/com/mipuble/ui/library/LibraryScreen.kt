@@ -95,6 +95,7 @@ import com.mipuble.domain.model.Category
 import com.mipuble.domain.model.DownloadStatus
 import com.mipuble.domain.model.UploadProgress
 import com.mipuble.domain.sort.BookSortOption
+import com.mipuble.domain.title.TitleNormalizer
 import java.io.File
 import kotlin.math.absoluteValue
 import kotlinx.coroutines.launch
@@ -161,6 +162,7 @@ fun LibraryScreen(
 
     var assigningBook by remember { mutableStateOf<Book?>(null) }
     var deletingBook by remember { mutableStateOf<Book?>(null) }
+    var renamingBook by remember { mutableStateOf<Book?>(null) }
     var editingCategory by remember { mutableStateOf<Category?>(null) }
     var creatingCategory by remember { mutableStateOf(false) }
     var showReview by remember { mutableStateOf(false) }
@@ -248,6 +250,10 @@ fun LibraryScreen(
                 viewModel.onEvict(book.id)
                 assigningBook = null
             },
+            onRename = {
+                assigningBook = null
+                renamingBook = book
+            },
             onDelete = {
                 assigningBook = null
                 deletingBook = book
@@ -264,6 +270,17 @@ fun LibraryScreen(
                 deletingBook = null
             },
             onDismiss = { deletingBook = null },
+        )
+    }
+
+    renamingBook?.let { book ->
+        RenameBookDialog(
+            book = book,
+            onConfirm = { series, volume, addToBookmark ->
+                viewModel.onRenameBook(book.id, series, volume, addToBookmark)
+                renamingBook = null
+            },
+            onDismiss = { renamingBook = null },
         )
     }
 
@@ -667,6 +684,7 @@ private fun AssignCategoryDialog(
     categories: List<Category>,
     onAssign: (Long?) -> Unit,
     onEvict: () -> Unit,
+    onRename: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -690,6 +708,9 @@ private fun AssignCategoryDialog(
                     )
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                TextButton(onClick = onRename) {
+                    Text("Rename book…")
+                }
                 TextButton(onClick = onDelete) {
                     Text("Delete book…", color = MaterialTheme.colorScheme.error)
                 }
@@ -743,6 +764,59 @@ private fun DeleteBookDialog(
             TextButton(onClick = { onConfirm(alsoFromDrive) }) {
                 Text("Delete", color = MaterialTheme.colorScheme.error)
             }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+/**
+ * Manual rename: splits the current title into editable series + volume fields
+ * (volume accepts decimals like "1.5"), with an opt-in to file it on a per-series
+ * bookmark. Pre-filled by re-parsing the book's current title.
+ */
+@Composable
+private fun RenameBookDialog(
+    book: Book,
+    onConfirm: (series: String, volume: String?, addToBookmark: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val parsed = remember(book.id) { TitleNormalizer.normalize(book.title) }
+    var series by remember(book.id) { mutableStateOf(parsed.series) }
+    var volume by remember(book.id) { mutableStateOf(parsed.volume ?: "") }
+    var addToBookmark by remember(book.id) { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rename book") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = series,
+                    onValueChange = { series = it },
+                    label = { Text("Series name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = volume,
+                    onValueChange = { volume = it },
+                    label = { Text("Volume (optional, e.g. 1.5)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = addToBookmark, onCheckedChange = { addToBookmark = it })
+                    Text("Add to bookmark")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(series.trim(), volume.trim().ifBlank { null }, addToBookmark) },
+                enabled = series.isNotBlank(),
+            ) { Text("Save") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

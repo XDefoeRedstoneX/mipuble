@@ -28,6 +28,7 @@ import com.mipuble.domain.usecase.ObserveLibraryUseCase
 import com.mipuble.domain.usecase.ObserveReviewQueueUseCase
 import com.mipuble.domain.usecase.ObserveUploadsUseCase
 import com.mipuble.domain.usecase.QueueBooksForReviewUseCase
+import com.mipuble.domain.usecase.RenameBookUseCase
 import com.mipuble.domain.usecase.ResolveReviewUseCase
 import com.mipuble.domain.usecase.SaveCustomOrderUseCase
 import com.mipuble.domain.usecase.SearchCatalogUseCase
@@ -95,6 +96,7 @@ class LibraryViewModel @Inject constructor(
     private val dismissReview: DismissReviewUseCase,
     private val searchCatalog: SearchCatalogUseCase,
     private val queueBooksForReview: QueueBooksForReviewUseCase,
+    private val renameBook: RenameBookUseCase,
     private val driveAuthProvider: DriveAuthProvider,
 ) : ViewModel() {
 
@@ -350,6 +352,15 @@ class LibraryViewModel @Inject constructor(
     /** Keeps a reviewed book's current title and drops it from the queue. */
     fun onDismissReview(bookId: Long) {
         viewModelScope.launch { dismissReview(bookId) }
+    }
+
+    /** Manual rename: explicit series + (decimal-capable) volume, with optional shelving. */
+    fun onRenameBook(bookId: Long, series: String, volume: String?, addToBookmark: Boolean) {
+        if (series.isBlank()) return
+        viewModelScope.launch {
+            renameBook(bookId, series, volume, addToBookmark)
+            _messages.update { "Renamed." }
+        }
     }
 
     /** Looks up catalog names for the review sheet's per-book search box. */

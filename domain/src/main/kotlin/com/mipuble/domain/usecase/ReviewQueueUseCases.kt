@@ -62,6 +62,37 @@ class SearchCatalogUseCase @Inject constructor(
 }
 
 /**
+ * Manual per-book rename: the user supplies the series and an optional (decimal-
+ * capable) volume directly. Rebuilds the title and dedup key, and optionally
+ * files the book into a per-series bookmark (independent of the auto-shelve
+ * setting — here the user asks for it explicitly).
+ */
+class RenameBookUseCase @Inject constructor(
+    private val bookRepository: BookRepository,
+    private val categoryRepository: CategoryRepository,
+) {
+    suspend operator fun invoke(
+        bookId: Long,
+        series: String,
+        volume: String?,
+        addToBookmark: Boolean,
+    ) {
+        val cleanSeries = series.trim()
+        if (cleanSeries.isEmpty()) return
+        val v = volume?.trim()?.takeIf { it.isNotEmpty() }?.let { TitleNormalizer.canonicalVolume(it) }
+        bookRepository.renameBook(
+            bookId = bookId,
+            title = TitleNormalizer.displayTitleFor(cleanSeries, v),
+            dedupKey = TitleNormalizer.dedupKeyFor(cleanSeries, v),
+        )
+        if (addToBookmark) {
+            val categoryId = categoryRepository.ensureCategory(cleanSeries, SeriesShelfColor.forName(cleanSeries))
+            bookRepository.setBookCategory(bookId, categoryId)
+        }
+    }
+}
+
+/**
  * Queues already-imported books for name review, recomputing each one's closest
  * catalog suggestions from its current title — so books added before naming (or
  * synced metadata-only from Drive) can be named too.

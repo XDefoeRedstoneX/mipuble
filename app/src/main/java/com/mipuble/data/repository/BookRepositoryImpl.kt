@@ -61,4 +61,7 @@ class BookRepositoryImpl @Inject constructor(
 
     override suspend fun markForReview(bookId: Long, suggestions: List<String>) =
         bookDao.markForReview(bookId, suggestions.joinToString("\n").ifEmpty { null })
+
+    override suspend fun renameBook(bookId: Long, title: String, dedupKey: String?) =
+        bookDao.applyReviewedTitle(bookId, title, dedupKey)
 }

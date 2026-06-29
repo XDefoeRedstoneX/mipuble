@@ -23,6 +23,7 @@ import com.mipuble.domain.usecase.ObserveLibraryUseCase
 import com.mipuble.domain.usecase.ObserveReviewQueueUseCase
 import com.mipuble.domain.usecase.ObserveUploadsUseCase
 import com.mipuble.domain.usecase.QueueBooksForReviewUseCase
+import com.mipuble.domain.usecase.RenameBookUseCase
 import com.mipuble.domain.usecase.ResolveReviewUseCase
 import com.mipuble.domain.usecase.SaveCustomOrderUseCase
 import com.mipuble.domain.usecase.SearchCatalogUseCase
@@ -75,6 +76,7 @@ class LibraryViewModelTest {
         override suspend fun applyCanonicalName(bookId: Long, canonicalSeries: String) = Unit
         override suspend fun dismissReview(bookId: Long) = Unit
         override suspend fun markForReview(bookId: Long, suggestions: List<String>) = Unit
+        override suspend fun renameBook(bookId: Long, title: String, dedupKey: String?) = Unit
     }
 
     private class FakeCategoryRepository : CategoryRepository {
@@ -159,6 +161,7 @@ class LibraryViewModelTest {
             dismissReview = DismissReviewUseCase(bookRepository),
             searchCatalog = SearchCatalogUseCase(FakeCatalogRepository()),
             queueBooksForReview = QueueBooksForReviewUseCase(bookRepository, FakeCatalogRepository()),
+            renameBook = RenameBookUseCase(bookRepository, categoryRepository),
             driveAuthProvider = UnconfiguredDriveAuthProvider(),
         )
     }

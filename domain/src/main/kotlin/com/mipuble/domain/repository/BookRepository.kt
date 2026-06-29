@@ -51,4 +51,7 @@ interface BookRepository {
 
     /** Flags an already-imported book for name review with the given suggestions. */
     suspend fun markForReview(bookId: Long, suggestions: List<String>)
+
+    /** Sets a book's display title and dedup identity directly (manual rename). */
+    suspend fun renameBook(bookId: Long, title: String, dedupKey: String?)
 }

@@ -21,7 +21,7 @@ class CatalogNormalizeTest {
     fun `confident match snaps the series to the official name`() {
         val n = TitleNormalizer.normalize("SpiceWolf v04 [Premium]", catalog)
         assertEquals("Spice and Wolf", n.series)
-        assertEquals(4, n.volume)
+        assertEquals("4", n.volume)
         assertEquals("Spice and Wolf, Vol. 4", n.displayTitle)
         assertEquals("spiceandwolf|4", n.dedupKey)
         assertEquals(MatchConfidence.AUTO, n.confidence)
@@ -32,7 +32,7 @@ class CatalogNormalizeTest {
         // No explicit "v"/"vol" marker — only safe to read 4 as a volume because
         // the series matched the catalog.
         val n = TitleNormalizer.normalize("Spice and Wolf 4", catalog)
-        assertEquals(4, n.volume)
+        assertEquals("4", n.volume)
         assertEquals("spiceandwolf|4", n.dedupKey)
         assertEquals(MatchConfidence.AUTO, n.confidence)
     }
@@ -52,7 +52,7 @@ class CatalogNormalizeTest {
         val c = SeriesCatalog(listOf("86―EIGHTY-SIX"))
         val n = TitleNormalizer.normalize("86―EIGHTY-SIX 6", c)
         assertEquals(MatchConfidence.AUTO, n.confidence)
-        assertEquals(6, n.volume)
+        assertEquals("6", n.volume)
     }
 
     @Test

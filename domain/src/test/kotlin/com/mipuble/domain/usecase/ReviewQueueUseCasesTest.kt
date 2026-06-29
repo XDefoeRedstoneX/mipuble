@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -56,6 +57,10 @@ class ReviewQueueUseCasesTest {
         val marked = mutableListOf<Pair<Long, List<String>>>()
         override suspend fun markForReview(bookId: Long, suggestions: List<String>) {
             marked += bookId to suggestions
+        }
+        var renamed: Triple<Long, String, String?>? = null
+        override suspend fun renameBook(bookId: Long, title: String, dedupKey: String?) {
+            renamed = Triple(bookId, title, dedupKey)
         }
     }
 
@@ -152,6 +157,30 @@ class ReviewQueueUseCasesTest {
         QueueBooksForReviewUseCase(repo, FakeCatalogRepository())(listOf(1L, 2L))
 
         assertEquals(listOf(1L, 2L), repo.marked.map { it.first })
+    }
+
+    @Test
+    fun `manual rename builds the title and dedup key from series and decimal volume`() = runTest {
+        val repo = FakeBookRepository(emptyList())
+        val category = FakeCategoryRepository()
+
+        RenameBookUseCase(repo, category)(5L, "Spice and Wolf", "1.5", addToBookmark = false)
+
+        assertEquals(Triple(5L, "Spice and Wolf, Vol. 1.5", "spiceandwolf|1.5"), repo.renamed)
+        assertTrue(category.ensured.isEmpty())
+        assertNull(repo.assignedCategory)
+    }
+
+    @Test
+    fun `manual rename with add-to-bookmark shelves the book`() = runTest {
+        val repo = FakeBookRepository(emptyList())
+        val category = FakeCategoryRepository()
+
+        RenameBookUseCase(repo, category)(5L, "Berserk", null, addToBookmark = true)
+
+        assertEquals(Triple(5L, "Berserk", "berserk"), repo.renamed)
+        assertTrue(category.ensured.contains("Berserk"))
+        assertEquals(5L to 42L, repo.assignedCategory)
     }
 
     @Test
