@@ -106,12 +106,13 @@ Manual rename (follows from decimal volumes):
   "add to bookmark" check. (Like the review sheet but explicit name+volume split,
   invokable on demand per book.)
 
-Reader:
-- Page count should reflect the EPUB's real page count, not a converted/derived
-  number.
-- Swipe (paged) page-turn is broken: the `PAGED_CSS` column layout renders the
-  whole chapter as 1–2 lines that run off-screen horizontally, consuming the
-  entire page count until it's no longer scrollable. Paged mode has been fragile
-  across several attempts (`PAGED_CSS` in `ReaderThemeColors.kt` + paging/scroll
-  logic in `ReaderScreen.kt`) — needs a proper, device-tested rework, not another
-  blind CSS tweak.
+Reader (reworked — awaiting on-device confirmation):
+- Paged mode was rebuilt as **vertical snap-paging**: CSS columns removed
+  entirely (`PAGED_CSS` gone), the chapter reflows normally, and a swipe
+  snap-scrolls one viewport at a time (`turnPage`/`PagingWebView.maxScrollY` in
+  `ReaderScreen.kt`). This sidesteps the fragile WebView multicolumn layout that
+  broke repeatedly.
+- The bottom bar now shows a **real page count** (`p. X/Y`) computed from the
+  rendered content height, not the chapter number. NOTE: per-chapter pages, not
+  a whole-book total — whole-book would need pre-rendering every chapter.
+- Both need a device check (no emulator here); revert/iterate if off.
