@@ -9,6 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -693,19 +696,27 @@ private fun AssignCategoryDialog(
         title = { Text(book.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
             Column {
-                CategoryChoiceRow(
-                    label = "No category",
-                    selected = book.categoryId == null,
-                    color = null,
-                    onClick = { onAssign(null) },
-                )
-                categories.forEach { category ->
+                // The category list scrolls within a bounded height so the
+                // Rename/Delete actions below it always stay reachable.
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 260.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
                     CategoryChoiceRow(
-                        label = category.name,
-                        selected = book.categoryId == category.id,
-                        color = Color(category.colorArgb),
-                        onClick = { onAssign(category.id) },
+                        label = "No category",
+                        selected = book.categoryId == null,
+                        color = null,
+                        onClick = { onAssign(null) },
                     )
+                    categories.forEach { category ->
+                        CategoryChoiceRow(
+                            label = category.name,
+                            selected = book.categoryId == category.id,
+                            color = Color(category.colorArgb),
+                            onClick = { onAssign(category.id) },
+                        )
+                    }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
                 TextButton(onClick = onRename) {

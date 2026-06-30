@@ -87,10 +87,11 @@ CI (`.github/workflows/ci.yml`) runs lint + unit tests + assembleDebug on every 
 
 UI/perf:
 - Bookmark (category) sidebar scroll is laggy — needs a performance look at the drawer's category list.
-- `AssignCategoryDialog` ("add book to bookmark") needs a scroll container — the
-  category list plus the Rename/Delete actions overflow and can't be reached.
 
 Done (was backlog):
+- **AssignCategoryDialog scroll** ✅ The category list now scrolls within a
+  bounded height (`heightIn(max=260.dp)` + `verticalScroll`) so the Rename/Delete
+  actions below it stay reachable.
 - **Decimal/comma volumes** ✅ Volume is now a canonical `String` in
   `TitleNormalizer` ("Vol 1.5", "v1,5" → "1.5"); dedup key is `seriesKey|volume`.
 - **Dedup gap (same-name copies)** ✅ Volume-less books now dedup by name key
