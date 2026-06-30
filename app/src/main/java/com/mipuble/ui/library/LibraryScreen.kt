@@ -33,7 +33,6 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -83,6 +82,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
@@ -376,25 +377,28 @@ private fun ReviewBanner(count: Int, onClick: () -> Unit) {
     }
 }
 
-/** The tag/bookmark silhouette used for category rows — points right. */
-private val TagShape = GenericShape { size, _ ->
-    val notch = size.width * 0.3f
-    moveTo(0f, 0f)
-    lineTo(size.width - notch, 0f)
-    lineTo(size.width, size.height / 2f)
-    lineTo(size.width - notch, size.height)
-    lineTo(0f, size.height)
-    close()
-}
-
+/**
+ * The tag/bookmark silhouette used for category rows — points right. Drawn
+ * directly (no clip layer) so a long, fast-scrolling bookmark list stays smooth.
+ */
 @Composable
 private fun CategoryTag(color: Color, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .width(26.dp)
             .height(16.dp)
-            .clip(TagShape)
-            .background(color),
+            .drawBehind {
+                val notch = size.width * 0.3f
+                val path = Path().apply {
+                    moveTo(0f, 0f)
+                    lineTo(size.width - notch, 0f)
+                    lineTo(size.width, size.height / 2f)
+                    lineTo(size.width - notch, size.height)
+                    lineTo(0f, size.height)
+                    close()
+                }
+                drawPath(path, color)
+            },
     )
 }
 

@@ -85,10 +85,13 @@ CI (`.github/workflows/ci.yml`) runs lint + unit tests + assembleDebug on every 
 
 ## Backlog (deferred — do not implement until asked)
 
-UI/perf:
-- Bookmark (category) sidebar scroll is laggy — needs a performance look at the drawer's category list.
-
 Done (was backlog):
+- **Sidebar scroll** ✅ `CategoryTag` now draws its bookmark silhouette via
+  `drawBehind`/`drawPath` instead of `clip(GenericShape)` (no per-row clip
+  layer), so a long auto-shelved bookmark list scrolls cheaper. Strong-skipping
+  (Kotlin 2.0) already minimizes recomposition. If it's still janky with
+  hundreds of bookmarks, the deeper fix is replacing Material
+  `NavigationDrawerItem` with a lighter custom row — wants device profiling.
 - **AssignCategoryDialog scroll** ✅ The category list now scrolls within a
   bounded height (`heightIn(max=260.dp)` + `verticalScroll`) so the Rename/Delete
   actions below it stay reachable.
@@ -111,4 +114,8 @@ Reader (reworked — awaiting on-device confirmation):
 - The bottom bar now shows a **real page count** (`p. X/Y`) computed from the
   rendered content height, not the chapter number. NOTE: per-chapter pages, not
   a whole-book total — whole-book would need pre-rendering every chapter.
+- Chrome (header/footer) now **overlays** the WebView instead of reserving space
+  via `Scaffold` slots — toggling controls no longer resizes/reflows the page
+  (which snapped scroll to the top). `ReaderContent` is a `Box` with the bars in
+  `AnimatedVisibility` aligned top/bottom.
 - Both need a device check (no emulator here); revert/iterate if off.

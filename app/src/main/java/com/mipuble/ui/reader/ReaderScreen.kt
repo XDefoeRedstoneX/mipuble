@@ -19,13 +19,17 @@ import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -119,61 +123,15 @@ private fun ReaderContent(
     var pageInfo by remember { mutableStateOf(0 to 0) }
     LaunchedEffect(state.chapterUrl) { pageInfo = 0 to 0 }
 
-    Scaffold(
-        topBar = {
-            AnimatedVisibility(visible = state.showControls) {
-                TopAppBar(
-                    title = {
-                        Text(state.bookTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to library")
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { onEvent(ReaderEvent.OpenSettings) }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Reading settings")
-                        }
-                    },
-                )
-            }
-        },
-        bottomBar = {
-            AnimatedVisibility(visible = state.showControls && state.error == null && !state.isLoading) {
-                BottomAppBar {
-                    IconButton(
-                        onClick = { onEvent(ReaderEvent.PreviousChapter) },
-                        enabled = state.hasPrevious,
-                    ) {
-                        Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Previous chapter")
-                    }
-                    val (page, pages) = pageInfo
-                    Text(
-                        text = if (pages > 0) {
-                            "Ch ${state.currentChapter + 1}/${state.chapterCount} · p. $page/$pages"
-                        } else {
-                            "Ch ${state.currentChapter + 1} / ${state.chapterCount}"
-                        },
-                        style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                    )
-                    IconButton(
-                        onClick = { onEvent(ReaderEvent.NextChapter) },
-                        enabled = state.hasNext,
-                    ) {
-                        Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Next chapter")
-                    }
-                }
-            }
-        },
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentAlignment = Alignment.Center,
-        ) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ReaderThemeColors.of(state.preferences.theme).background),
+    ) {
+        // The reader content fills the whole screen, so showing/hiding the chrome
+        // never resizes the WebView — which would reflow the page and lose the
+        // reading position. The bars *overlay* the content instead.
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             when {
                 state.isLoading -> CircularProgressIndicator()
                 state.error != null -> Text(
@@ -188,6 +146,59 @@ private fun ReaderContent(
                     onEvent = onEvent,
                     onPageInfo = { current, total -> pageInfo = current to total },
                 )
+            }
+        }
+
+        AnimatedVisibility(
+            visible = state.showControls,
+            modifier = Modifier.align(Alignment.TopCenter),
+            enter = slideInVertically { -it } + fadeIn(),
+            exit = slideOutVertically { -it } + fadeOut(),
+        ) {
+            TopAppBar(
+                title = { Text(state.bookTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to library")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { onEvent(ReaderEvent.OpenSettings) }) {
+                        Icon(Icons.Default.Settings, contentDescription = "Reading settings")
+                    }
+                },
+            )
+        }
+
+        AnimatedVisibility(
+            visible = state.showControls && state.error == null && !state.isLoading,
+            modifier = Modifier.align(Alignment.BottomCenter),
+            enter = slideInVertically { it } + fadeIn(),
+            exit = slideOutVertically { it } + fadeOut(),
+        ) {
+            BottomAppBar {
+                IconButton(
+                    onClick = { onEvent(ReaderEvent.PreviousChapter) },
+                    enabled = state.hasPrevious,
+                ) {
+                    Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Previous chapter")
+                }
+                val (page, pages) = pageInfo
+                Text(
+                    text = if (pages > 0) {
+                        "Ch ${state.currentChapter + 1}/${state.chapterCount} · p. $page/$pages"
+                    } else {
+                        "Ch ${state.currentChapter + 1} / ${state.chapterCount}"
+                    },
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(horizontal = 8.dp),
+                )
+                IconButton(
+                    onClick = { onEvent(ReaderEvent.NextChapter) },
+                    enabled = state.hasNext,
+                ) {
+                    Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Next chapter")
+                }
             }
         }
     }
