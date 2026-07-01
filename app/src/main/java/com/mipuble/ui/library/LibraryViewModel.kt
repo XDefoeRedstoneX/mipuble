@@ -62,6 +62,11 @@ data class LibraryUiState(
     /** Multi-select mode for picking books to review by name. */
     val selectionMode: Boolean = false,
     val selectedBookIds: Set<Long> = emptySet(),
+    /** The book to surface in the "Continue reading" hero, drawn from the whole
+     *  (unfiltered) library; null when nothing is mid-read. */
+    val continueReading: Book? = null,
+    /** Total books across the whole library, independent of the active filter. */
+    val libraryCount: Int = 0,
 ) {
     /**
      * Drag-and-drop only makes sense when looking at the full library in the
@@ -132,10 +137,15 @@ class LibraryViewModel @Inject constructor(
             // flatMapLatest: changing sort/filter cancels the previous stream
             // and re-subscribes — no stale emissions.
             .flatMapLatest { (sort, category) ->
+                // The unfiltered stream backs the "Continue reading" hero and the
+                // library-wide count, so both stay stable under an active filter.
                 combine(
                     observeLibrary(sort, category),
+                    observeLibrary(BookSortOption.DATE_ADDED, null),
                     observeCategories(),
-                ) { books, categories -> Triple(sort, category, books to categories) }
+                ) { books, allBooks, categories ->
+                    LibrarySlice(sort, category, books, categories, allBooks.pickContinueReading(), allBooks.size)
+                }
             }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -154,14 +164,13 @@ class LibraryViewModel @Inject constructor(
             syncUploadConsent,
             observeReviewQueue(),
             selectionState,
-        ) { (sort, category, data), downloads, (syncing, upload, consent), reviewQueue, (selMode, selIds) ->
-            val (books, categories) = data
+        ) { slice, downloads, (syncing, upload, consent), reviewQueue, (selMode, selIds) ->
             LibraryUiState(
                 isLoading = false,
-                books = books,
-                sortOption = sort,
-                categories = categories,
-                selectedCategoryId = category,
+                books = slice.books,
+                sortOption = slice.sort,
+                categories = slice.categories,
+                selectedCategoryId = slice.category,
                 downloads = downloads,
                 isSyncing = syncing,
                 upload = upload,
@@ -169,6 +178,8 @@ class LibraryViewModel @Inject constructor(
                 reviewQueue = reviewQueue,
                 selectionMode = selMode,
                 selectedBookIds = selIds,
+                continueReading = slice.continueReading,
+                libraryCount = slice.libraryCount,
             )
         }.stateIn(
             scope = viewModelScope,
@@ -397,3 +408,24 @@ class LibraryViewModel @Inject constructor(
         _messages.update { null }
     }
 }
+
+/** Everything the library flow derives from one sort/filter emission. */
+private data class LibrarySlice(
+    val sort: BookSortOption,
+    val category: Long?,
+    val books: List<Book>,
+    val categories: List<Category>,
+    val continueReading: Book?,
+    val libraryCount: Int,
+)
+
+/**
+ * The book to resume: the furthest-along, still-open, downloaded book. Finished
+ * books (progress ≥ 1) and undownloaded ones are excluded since the hero opens
+ * straight into the reader.
+ */
+private fun List<Book>.pickContinueReading(): Book? =
+    filter { it.isDownloaded && it.progress < 1f && (it.progress > 0f || it.lastChapterIndex > 0) }
+        .maxWithOrNull(
+            compareBy({ it.progress }, { it.lastChapterIndex }, { it.addedAtEpochMillis }),
+        )
