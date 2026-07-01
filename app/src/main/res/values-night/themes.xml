@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Warm-night ("Ink") cold-start window background; see values/themes.xml. -->
+    <style name="Theme.Mipuble" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ink_bg</item>
+    </style>
+</resources>

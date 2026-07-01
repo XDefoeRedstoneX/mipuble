@@ -1,4 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#1B4D3E</color>
+    <!-- Window (pre-Compose, cold-start) backgrounds so the splash matches the
+         Paper & Ink brand. Compose owns everything after first draw. -->
+    <color name="paper">#F5EFE4</color>
+    <color name="ink_bg">#16130E</color>
 </resources>
