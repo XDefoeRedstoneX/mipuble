@@ -15,10 +15,11 @@ data class ReaderThemeColors(
 ) {
     companion object {
         fun of(theme: ReaderTheme): ReaderThemeColors = when (theme) {
-            ReaderTheme.LIGHT -> ReaderThemeColors(Color(0xFFFFFFFF), Color(0xFF1A1A1A), Color(0xFF1B4D3E))
-            ReaderTheme.SEPIA -> ReaderThemeColors(Color(0xFFF4ECD8), Color(0xFF5B4636), Color(0xFF7A542E))
-            ReaderTheme.DARK -> ReaderThemeColors(Color(0xFF121212), Color(0xFFC9C9C9), Color(0xFF9FD8C2))
-            ReaderTheme.BLACK -> ReaderThemeColors(Color(0xFF000000), Color(0xFFB0B0B0), Color(0xFF9FD8C2))
+            // Retuned to the warm "Paper & Ink" palette; LIGHT is warm paper, not white.
+            ReaderTheme.LIGHT -> ReaderThemeColors(Color(0xFFF5EFE4), Color(0xFF241F19), Color(0xFF3E6B54))
+            ReaderTheme.SEPIA -> ReaderThemeColors(Color(0xFFEFE4CE), Color(0xFF4A3D2A), Color(0xFF7A542E))
+            ReaderTheme.DARK -> ReaderThemeColors(Color(0xFF16130E), Color(0xFFD9D0C0), Color(0xFF93C2A2))
+            ReaderTheme.BLACK -> ReaderThemeColors(Color(0xFF000000), Color(0xFFB0B0B0), Color(0xFF93C2A2))
         }
     }
 }
@@ -108,7 +109,7 @@ fun readerOverrideCss(preferences: ReaderPreferences): String {
     val paged = if (preferences.pageTurnMode == PageTurnMode.PAGED) PAGED_CSS else ""
     return """
         html, body { background-color: $bg !important; color: $fg !important; }
-        body { line-height: $lineHeight !important; padding: 2vh 6% !important; margin: 0 !important; }
+        body { line-height: $lineHeight !important; padding: 2vh 7% !important; margin: 0 !important; }
         p, li, div, span { color: $fg !important; }
         a { color: $link !important; }
         img, svg {

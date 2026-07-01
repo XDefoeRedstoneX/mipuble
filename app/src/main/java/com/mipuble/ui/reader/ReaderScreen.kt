@@ -10,24 +10,32 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -37,8 +45,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -112,71 +124,177 @@ private fun ReaderContent(
     readResource: (String) -> ByteArray?,
     onBack: () -> Unit,
 ) {
-    Scaffold(
-        topBar = {
-            AnimatedVisibility(visible = state.showControls) {
-                TopAppBar(
-                    title = {
-                        Text(state.bookTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to library")
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { onEvent(ReaderEvent.OpenSettings) }) {
-                            Icon(Icons.Default.Settings, contentDescription = "Reading settings")
-                        }
-                    },
-                )
-            }
-        },
-        bottomBar = {
-            AnimatedVisibility(visible = state.showControls && state.error == null && !state.isLoading) {
-                BottomAppBar {
-                    IconButton(
-                        onClick = { onEvent(ReaderEvent.PreviousChapter) },
-                        enabled = state.hasPrevious,
-                    ) {
-                        Icon(Icons.Default.KeyboardArrowLeft, contentDescription = "Previous chapter")
-                    }
-                    Text(
-                        text = "${state.currentChapter + 1} / ${state.chapterCount}",
-                        style = MaterialTheme.typography.labelLarge,
-                        modifier = Modifier.padding(horizontal = 8.dp),
-                    )
-                    IconButton(
-                        onClick = { onEvent(ReaderEvent.NextChapter) },
-                        enabled = state.hasNext,
-                    ) {
-                        Icon(Icons.Default.KeyboardArrowRight, contentDescription = "Next chapter")
-                    }
-                }
-            }
-        },
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-            contentAlignment = Alignment.Center,
+    // Chrome is tinted from the page colors (not Material) so it reads over the
+    // page in every theme. It floats over a full-bleed WebView, so toggling the
+    // controls never changes the content size — the WebView never reflows.
+    val colors = ReaderThemeColors.of(state.preferences.theme)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.background),
+        contentAlignment = Alignment.Center,
+    ) {
+        when {
+            state.isLoading -> CircularProgressIndicator(color = colors.link)
+            state.error != null -> Text(
+                text = state.error,
+                style = MaterialTheme.typography.bodyLarge,
+                color = colors.text,
+            )
+            state.chapterUrl != null -> ChapterWebView(
+                chapterUrl = state.chapterUrl,
+                preferences = state.preferences,
+                readResource = readResource,
+                onEvent = onEvent,
+            )
+        }
+
+        AnimatedVisibility(
+            visible = state.showControls,
+            modifier = Modifier.align(Alignment.TopCenter),
         ) {
-            when {
-                state.isLoading -> CircularProgressIndicator()
-                state.error != null -> Text(
-                    text = state.error,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            CenterAlignedTopAppBar(
+                title = {
+                    Text(
+                        state.bookTitle,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to library")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { onEvent(ReaderEvent.OpenSettings) }) {
+                        Icon(
+                            painter = painterResource(com.mipuble.R.drawable.ic_tune),
+                            contentDescription = "Display settings",
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = colors.background.copy(alpha = 0.88f),
+                    titleContentColor = colors.text,
+                    navigationIconContentColor = colors.text,
+                    actionIconContentColor = colors.text,
+                ),
+            )
+        }
+
+        AnimatedVisibility(
+            visible = state.showControls && state.error == null && !state.isLoading,
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            ReaderBottomBar(
+                colors = colors,
+                currentChapter = state.currentChapter,
+                chapterCount = state.chapterCount,
+                hasPrevious = state.hasPrevious,
+                hasNext = state.hasNext,
+                onPrevious = { onEvent(ReaderEvent.PreviousChapter) },
+                onNext = { onEvent(ReaderEvent.NextChapter) },
+            )
+        }
+    }
+}
+
+/**
+ * The slim reading rail: prev/next chevrons flanking a fine chapter-progress
+ * track, over a soft bottom gradient of the page color. Tinted from the page
+ * colors so it reads on any theme.
+ */
+@Composable
+private fun ReaderBottomBar(
+    colors: ReaderThemeColors,
+    currentChapter: Int,
+    chapterCount: Int,
+    hasPrevious: Boolean,
+    hasNext: Boolean,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+) {
+    val fraction = if (chapterCount > 0) {
+        ((currentChapter + 1f) / chapterCount).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(listOf(Color.Transparent, colors.background)),
+            )
+            .navigationBarsPadding()
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            text = "Chapter ${currentChapter + 1} of $chapterCount",
+            style = MaterialTheme.typography.labelMedium,
+            color = colors.text.copy(alpha = 0.75f),
+        )
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onPrevious, enabled = hasPrevious) {
+                Icon(
+                    Icons.Default.KeyboardArrowLeft,
+                    contentDescription = "Previous chapter",
+                    tint = colors.text.copy(alpha = if (hasPrevious) 1f else 0.3f),
                 )
-                state.chapterUrl != null -> ChapterWebView(
-                    chapterUrl = state.chapterUrl,
-                    preferences = state.preferences,
-                    readResource = readResource,
-                    onEvent = onEvent,
+            }
+            ChapterRail(
+                fraction = fraction,
+                colors = colors,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
+            )
+            IconButton(onClick = onNext, enabled = hasNext) {
+                Icon(
+                    Icons.Default.KeyboardArrowRight,
+                    contentDescription = "Next chapter",
+                    tint = colors.text.copy(alpha = if (hasNext) 1f else 0.3f),
                 )
             }
         }
+    }
+}
+
+/** A 4dp progress track with a knob at [fraction] (0..1) of the way through. */
+@Composable
+private fun ChapterRail(
+    fraction: Float,
+    colors: ReaderThemeColors,
+    modifier: Modifier = Modifier,
+) {
+    // Weights must stay > 0, so keep the knob just inside either end.
+    val filled = fraction.coerceIn(0.001f, 0.999f)
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .weight(filled)
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(colors.link),
+        )
+        Box(
+            modifier = Modifier
+                .size(12.dp)
+                .clip(CircleShape)
+                .background(colors.link),
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f - filled)
+                .height(4.dp)
+                .clip(RoundedCornerShape(2.dp))
+                .background(colors.text.copy(alpha = 0.2f)),
+        )
     }
 }
 
