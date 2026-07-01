@@ -4,8 +4,11 @@ import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -22,7 +26,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -42,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -97,7 +101,7 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text("Settings", style = MaterialTheme.typography.headlineSmall) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -112,126 +116,123 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(22.dp),
         ) {
-            SectionTitle("Reading defaults")
-            Text(
-                "These apply to every book; the reader's own panel changes them too.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            ThemeRow(
-                selected = uiState.preferences.theme,
-                onSelect = viewModel::onThemeSelected,
-            )
-            FontPickerRow(
-                selected = uiState.preferences.font,
-                onSelect = viewModel::onFontSelected,
-            )
-            PageTurnModeRow(
-                selected = uiState.preferences.pageTurnMode,
-                onSelect = viewModel::onPageTurnModeSelected,
-            )
-            StepperRow(
-                label = "Text size",
-                value = "${uiState.preferences.fontScalePercent}%",
-                onDecrease = { viewModel.onStepFont(-1) },
-                onIncrease = { viewModel.onStepFont(+1) },
-            )
-            StepperRow(
-                label = "Line spacing",
-                value = "%.1f".format(uiState.preferences.lineSpacingPercent / 100f),
-                onDecrease = { viewModel.onStepLineSpacing(-1) },
-                onIncrease = { viewModel.onStepLineSpacing(+1) },
-            )
+            SettingsSection("Reading defaults") {
+                Text(
+                    "These apply to every book; the reader's own panel changes them too.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                ThemeRow(
+                    selected = uiState.preferences.theme,
+                    onSelect = viewModel::onThemeSelected,
+                )
+                FontPickerRow(
+                    selected = uiState.preferences.font,
+                    onSelect = viewModel::onFontSelected,
+                )
+                PageTurnModeRow(
+                    selected = uiState.preferences.pageTurnMode,
+                    onSelect = viewModel::onPageTurnModeSelected,
+                )
+                StepperRow(
+                    label = "Text size",
+                    value = "${uiState.preferences.fontScalePercent}%",
+                    onDecrease = { viewModel.onStepFont(-1) },
+                    onIncrease = { viewModel.onStepFont(+1) },
+                )
+                StepperRow(
+                    label = "Line spacing",
+                    value = "%.1f".format(uiState.preferences.lineSpacingPercent / 100f),
+                    onDecrease = { viewModel.onStepLineSpacing(-1) },
+                    onIncrease = { viewModel.onStepLineSpacing(+1) },
+                )
+            }
 
-            HorizontalDivider()
+            SettingsSection("Google Drive") {
+                Text(
+                    if (uiState.remoteAvailable) "Connected to Google Drive" else "Not connected",
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    "Books sync from the \"mipuble\" folder in your Drive.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Button(onClick = viewModel::onSyncNow, enabled = !uiState.isSyncing) {
+                        if (uiState.isSyncing) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        Text("Sync now")
+                    }
+                    OutlinedButton(onClick = { showDriveGuide = true }) {
+                        Text("Setup help…")
+                    }
+                }
 
-            SectionTitle("Google Drive")
-            Text(
-                if (uiState.remoteAvailable) "Connected to Google Drive" else "Not connected",
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            Text(
-                "Books sync from the \"mipuble\" folder in your Drive.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(onClick = viewModel::onSyncNow, enabled = !uiState.isSyncing) {
-                    if (uiState.isSyncing) {
+                // Live progress for an upload batch or a running reset.
+                uiState.upload?.let { up ->
+                    Text(
+                        if (up.scanning) "Scanning folder…" else "Uploading ${up.currentIndex}/${up.total}: ${up.fileName}",
+                        style = MaterialTheme.typography.labelMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (up.scanning) {
+                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                    } else {
+                        LinearProgressIndicator(progress = { up.fraction }, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+
+                OutlinedButton(
+                    onClick = { showReset = true },
+                    enabled = !uiState.isResetting && uiState.upload == null,
+                ) {
+                    if (uiState.isResetting) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(8.dp))
                     }
-                    Text("Sync now")
-                }
-                OutlinedButton(onClick = { showDriveGuide = true }) {
-                    Text("Setup help…")
+                    Text("Reset library to Drive…")
                 }
             }
 
-            // Live progress for an upload batch or a running reset.
-            uiState.upload?.let { up ->
+            SettingsSection("Storage") {
                 Text(
-                    if (up.scanning) "Scanning folder…" else "Uploading ${up.currentIndex}/${up.total}: ${up.fileName}",
-                    style = MaterialTheme.typography.labelMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    "${uiState.downloadedCount} book(s) downloaded on this device",
+                    style = MaterialTheme.typography.bodyLarge,
                 )
-                if (up.scanning) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                } else {
-                    LinearProgressIndicator(progress = { up.fraction }, modifier = Modifier.fillMaxWidth())
+                OutlinedButton(
+                    onClick = viewModel::onRemoveAllDownloads,
+                    enabled = uiState.evictableIds.isNotEmpty(),
+                ) {
+                    Text("Remove all downloads (keep books in library)")
+                }
+                OutlinedButton(
+                    onClick = viewModel::onRebuildCovers,
+                    enabled = !uiState.isRebuildingCovers,
+                ) {
+                    if (uiState.isRebuildingCovers) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text("Rebuild missing covers")
                 }
             }
 
-            OutlinedButton(
-                onClick = { showReset = true },
-                enabled = !uiState.isResetting && uiState.upload == null,
-            ) {
-                if (uiState.isResetting) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                }
-                Text("Reset library to Drive…")
+            SettingsSection("About") {
+                Text("mipuble ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "A native EPUB reader. Natural sorting, ±1% brightness, " +
+                        "custom shelves, and a metadata-only cloud library.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
-
-            HorizontalDivider()
-
-            SectionTitle("Storage")
-            Text(
-                "${uiState.downloadedCount} book(s) downloaded on this device",
-                style = MaterialTheme.typography.bodyLarge,
-            )
-            OutlinedButton(
-                onClick = viewModel::onRemoveAllDownloads,
-                enabled = uiState.evictableIds.isNotEmpty(),
-            ) {
-                Text("Remove all downloads (keep books in library)")
-            }
-            OutlinedButton(
-                onClick = viewModel::onRebuildCovers,
-                enabled = !uiState.isRebuildingCovers,
-            ) {
-                if (uiState.isRebuildingCovers) {
-                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(8.dp))
-                }
-                Text("Rebuild missing covers")
-            }
-
-            HorizontalDivider()
-
-            SectionTitle("About")
-            Text("mipuble ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge)
-            Text(
-                "A native EPUB reader. Natural sorting, ±1% brightness, " +
-                    "custom shelves, and a metadata-only cloud library.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Spacer(Modifier.size(8.dp))
         }
     }
 
@@ -295,9 +296,27 @@ private fun ResetToDriveDialog(
     )
 }
 
+/** An accent uppercase eyebrow over a hairline surface card holding the rows. */
 @Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
+    Column {
+        Text(
+            text = title.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            content = content,
+        )
+    }
 }
 
 /**

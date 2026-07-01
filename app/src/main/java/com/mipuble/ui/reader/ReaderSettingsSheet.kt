@@ -14,12 +14,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -52,7 +54,11 @@ fun ReaderSettingsSheet(
     onEvent: (ReaderEvent) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -60,7 +66,7 @@ fun ReaderSettingsSheet(
                 .padding(bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Text("Display", style = MaterialTheme.typography.titleMedium)
+            Text("Display", style = MaterialTheme.typography.titleLarge)
 
             ThemeRow(selected = preferences.theme, onSelect = { onEvent(ReaderEvent.SetTheme(it)) })
 
@@ -95,6 +101,15 @@ fun ReaderSettingsSheet(
     }
 }
 
+/** Brand-facing names for the reader page themes. */
+private val ReaderTheme.displayLabel: String
+    get() = when (this) {
+        ReaderTheme.LIGHT -> "Paper"
+        ReaderTheme.SEPIA -> "Sepia"
+        ReaderTheme.DARK -> "Ink"
+        ReaderTheme.BLACK -> "Black"
+    }
+
 @Composable
 internal fun ThemeRow(selected: ReaderTheme, onSelect: (ReaderTheme) -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -104,11 +119,11 @@ internal fun ThemeRow(selected: ReaderTheme, onSelect: (ReaderTheme) -> Unit) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(
                     modifier = Modifier
-                        .size(44.dp)
+                        .size(52.dp)
                         .clip(CircleShape)
                         .background(colors.background)
                         .border(
-                            width = if (isSelected) 3.dp else 1.dp,
+                            width = if (isSelected) 2.5.dp else 1.dp,
                             color = if (isSelected) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.outlineVariant,
                             shape = CircleShape,
@@ -116,12 +131,20 @@ internal fun ThemeRow(selected: ReaderTheme, onSelect: (ReaderTheme) -> Unit) {
                         .clickable { onSelect(theme) },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("A", color = colors.text, fontWeight = FontWeight.Bold)
+                    // A serif "A" in the theme's own text color previews the page.
+                    Text(
+                        "A",
+                        color = colors.text,
+                        style = MaterialTheme.typography.titleLarge,
+                    )
                 }
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
-                    text = theme.name.lowercase().replaceFirstChar { it.uppercase() },
-                    style = MaterialTheme.typography.labelSmall,
+                    text = theme.displayLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }
@@ -137,8 +160,12 @@ internal fun StepperRow(
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        FilledTonalIconButton(onClick = onDecrease) {
-            Text("−", style = MaterialTheme.typography.titleLarge) // minus sign
+        FilledTonalIconButton(
+            onClick = onDecrease,
+            shape = RoundedCornerShape(11.dp),
+            modifier = Modifier.size(36.dp),
+        ) {
+            Text("−", style = MaterialTheme.typography.titleMedium) // minus sign
         }
         Text(
             text = value,
@@ -148,8 +175,12 @@ internal fun StepperRow(
             textAlign = TextAlign.Center,
             style = MaterialTheme.typography.titleMedium,
         )
-        FilledTonalIconButton(onClick = onIncrease) {
-            Text("+", style = MaterialTheme.typography.titleLarge)
+        FilledTonalIconButton(
+            onClick = onIncrease,
+            shape = RoundedCornerShape(11.dp),
+            modifier = Modifier.size(36.dp),
+        ) {
+            Text("+", style = MaterialTheme.typography.titleMedium)
         }
     }
 }
@@ -161,7 +192,7 @@ internal fun FontPickerRow(selected: ReaderFont, onSelect: (ReaderFont) -> Unit)
 
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("Font", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
-        OutlinedButton(onClick = { expanded = true }) {
+        OutlinedButton(onClick = { expanded = true }, shape = CircleShape) {
             // Show the choice IN its own typeface, not just its name.
             Text(selected.displayName, fontFamily = selectedFamily)
         }
@@ -203,8 +234,12 @@ internal fun PageTurnModeRow(selected: PageTurnMode, onSelect: (PageTurnMode) ->
                     selected = selected == mode,
                     onClick = { onSelect(mode) },
                     shape = SegmentedButtonDefaults.itemShape(index, PageTurnMode.entries.size),
+                    colors = SegmentedButtonDefaults.colors(
+                        activeContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        activeContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
                 ) {
-                    Text(if (mode == PageTurnMode.SCROLL) "Scroll down" else "Swipe pages")
+                    Text(if (mode == PageTurnMode.SCROLL) "Scroll" else "Swipe pages")
                 }
             }
         }
@@ -216,9 +251,11 @@ private fun BrightnessSection(
     preferences: ReaderPreferences,
     onEvent: (ReaderEvent) -> Unit,
 ) {
+    val enabled = !preferences.followSystemBrightness
+
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Brightness", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+            Text("Brightness", modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
             Text("Follow system", style = MaterialTheme.typography.labelMedium)
             Spacer(Modifier.width(8.dp))
             Switch(
@@ -231,35 +268,71 @@ private fun BrightnessSection(
         Row(verticalAlignment = Alignment.CenterVertically) {
             FilledTonalIconButton(
                 onClick = { onEvent(ReaderEvent.DecreaseBrightness) },
-                enabled = !preferences.followSystemBrightness,
+                enabled = enabled,
+                shape = RoundedCornerShape(11.dp),
+                modifier = Modifier.size(36.dp),
             ) {
-                Text("−", style = MaterialTheme.typography.titleLarge) // brightness down 1%
+                Text("−", style = MaterialTheme.typography.titleMedium) // brightness down 1%
             }
             Slider(
                 value = preferences.brightnessPercent.toFloat(),
                 onValueChange = { onEvent(ReaderEvent.SetBrightness(it.toInt())) },
                 valueRange = ReaderSettingsBounds.BRIGHTNESS_MIN.toFloat()..ReaderSettingsBounds.BRIGHTNESS_MAX.toFloat(),
-                enabled = !preferences.followSystemBrightness,
+                enabled = enabled,
+                colors = SliderDefaults.colors(
+                    thumbColor = MaterialTheme.colorScheme.primary,
+                    activeTrackColor = MaterialTheme.colorScheme.primary,
+                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
                 modifier = Modifier
                     .weight(1f)
                     .padding(horizontal = 8.dp),
             )
             FilledTonalIconButton(
                 onClick = { onEvent(ReaderEvent.IncreaseBrightness) },
-                enabled = !preferences.followSystemBrightness,
+                enabled = enabled,
+                shape = RoundedCornerShape(11.dp),
+                modifier = Modifier.size(36.dp),
             ) {
-                Text("+", style = MaterialTheme.typography.titleLarge) // brightness up 1%
+                Text("+", style = MaterialTheme.typography.titleMedium) // brightness up 1%
             }
         }
 
-        Text(
-            text = if (preferences.followSystemBrightness) {
-                "Using system brightness"
-            } else {
-                "${preferences.brightnessPercent}%  ·  ±1% per tap"
-            },
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        if (preferences.followSystemBrightness) {
+            Text(
+                text = "Using system brightness",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "${preferences.brightnessPercent}%",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Spacer(Modifier.width(8.dp))
+                // A pill that signals the signature 1%-precision feature.
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                ) {
+                    Text(
+                        text = "±1%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "per tap",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
     }
 }
