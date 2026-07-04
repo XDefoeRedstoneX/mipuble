@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -472,7 +473,12 @@ private fun ChapterWebView(
             }
             webView.setTag(R_CSS, cssSignature)
         },
-        modifier = Modifier.fillMaxSize(),
+        // System-bar padding keeps the first/last lines clear of the status bar
+        // and gesture area (the old Scaffold insets did this). It's a constant
+        // inset, so toggling the chrome overlay still never resizes the WebView.
+        modifier = Modifier
+            .fillMaxSize()
+            .systemBarsPadding(),
     )
 }
 

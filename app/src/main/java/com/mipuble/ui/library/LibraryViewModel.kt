@@ -137,14 +137,14 @@ class LibraryViewModel @Inject constructor(
             // flatMapLatest: changing sort/filter cancels the previous stream
             // and re-subscribes — no stale emissions.
             .flatMapLatest { (sort, category) ->
-                // The unfiltered stream backs the "Continue reading" hero and the
-                // library-wide count, so both stay stable under an active filter.
+                // snapshot() derives the shelf, the "Continue reading" hero, and
+                // the library-wide count from one repository read, so a books
+                // write costs one query + one sort + one emission.
                 combine(
-                    observeLibrary(sort, category),
-                    observeLibrary(BookSortOption.DATE_ADDED, null),
+                    observeLibrary.snapshot(sort, category),
                     observeCategories(),
-                ) { books, allBooks, categories ->
-                    LibrarySlice(sort, category, books, categories, allBooks.pickContinueReading(), allBooks.size)
+                ) { snapshot, categories ->
+                    LibrarySlice(sort, category, snapshot.books, categories, snapshot.continueReading, snapshot.totalCount)
                 }
             }
 
@@ -418,14 +418,3 @@ private data class LibrarySlice(
     val continueReading: Book?,
     val libraryCount: Int,
 )
-
-/**
- * The book to resume: the furthest-along, still-open, downloaded book. Finished
- * books (progress ≥ 1) and undownloaded ones are excluded since the hero opens
- * straight into the reader.
- */
-private fun List<Book>.pickContinueReading(): Book? =
-    filter { it.isDownloaded && it.progress < 1f && (it.progress > 0f || it.lastChapterIndex > 0) }
-        .maxWithOrNull(
-            compareBy({ it.progress }, { it.lastChapterIndex }, { it.addedAtEpochMillis }),
-        )

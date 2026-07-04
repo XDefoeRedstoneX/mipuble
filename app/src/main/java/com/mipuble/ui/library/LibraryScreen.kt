@@ -69,6 +69,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -84,6 +85,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -364,6 +366,13 @@ private fun ReviewBanner(count: Int, onClick: () -> Unit) {
     }
 }
 
+// Shapes and lambdas used inside grid items — hoisted so cards scrolling into
+// view don't reallocate them on every composition.
+private val CoverShape = RoundedCornerShape(6.dp)
+private val RailShape = RoundedCornerShape(2.dp)
+private val CardShape = RoundedCornerShape(14.dp)
+private val NoStopIndicator: DrawScope.() -> Unit = {}
+
 /** The cloth-bookmark silhouette — a rectangle with a downward notch cut into
  *  its bottom edge. The signature shape of the whole category system. */
 private val TagShape = GenericShape { size, _ ->
@@ -641,8 +650,10 @@ fun LibraryContent(
 
             // Hero + shelf header ride above the grid (kept out of the grid so the
             // reorder index space stays untouched). The hero is only shown in the
-            // unfiltered "All books" view, matching where it's sourced from.
-            if (!uiState.selectionMode && uiState.books.isNotEmpty()) {
+            // unfiltered "All books" view, matching where it's sourced from. The
+            // header stays visible on an empty shelf — it hosts the app's only
+            // sort control, which must remain reachable to leave "My order".
+            if (!uiState.selectionMode && !uiState.isLoading) {
                 if (uiState.selectedCategoryId == null) {
                     uiState.continueReading?.let { book ->
                         ContinueReadingCard(book = book, onOpen = { onBookClick(book) })
@@ -704,6 +715,8 @@ private fun BookGrid(
 ) {
     val gridState = rememberLazyGridState()
     val localBooks = remember(uiState.books) { uiState.books.toMutableStateList() }
+    // O(1) ribbon lookup per card; a linear scan would run per item per recomposition.
+    val categoriesById = remember(uiState.categories) { uiState.categories.associateBy { it.id } }
 
     val dragState = rememberGridDragState(
         gridState = gridState,
@@ -732,7 +745,7 @@ private fun BookGrid(
         itemsIndexed(localBooks, key = { _, book -> book.id }) { index, book ->
             BookCard(
                 book = book,
-                category = uiState.categories.firstOrNull { it.id == book.categoryId },
+                category = book.categoryId?.let { categoriesById[it] },
                 downloadStatus = uiState.downloads[book.id],
                 selectionMode = uiState.selectionMode,
                 isSelected = book.id in uiState.selectedBookIds,
@@ -769,7 +782,7 @@ private fun AssignCategoryDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(14.dp),
+        shape = CardShape,
         title = { Text(book.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
             Column {
@@ -819,7 +832,7 @@ private fun DeleteBookDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(14.dp),
+        shape = CardShape,
         title = { Text("Delete book") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -904,7 +917,7 @@ private fun CategoryEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(14.dp),
+        shape = CardShape,
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1022,7 +1035,10 @@ private fun SortChip(
     Box {
         Row(
             verticalAlignment = Alignment.CenterVertically,
+            // minimumInteractiveComponentSize keeps the 48dp touch target the
+            // old IconButton provided; the visual pill stays compact.
             modifier = Modifier
+                .minimumInteractiveComponentSize()
                 .clip(CircleShape)
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
                 .clickable { expanded = true }
@@ -1098,9 +1114,9 @@ private fun ContinueReadingCard(book: Book, onOpen: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
+                .clip(CardShape)
                 .background(MaterialTheme.colorScheme.surface)
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CardShape)
                 .clickable(onClick = onOpen)
                 .padding(14.dp),
         ) {
@@ -1108,7 +1124,7 @@ private fun ContinueReadingCard(book: Book, onOpen: () -> Unit) {
                 modifier = Modifier
                     .width(66.dp)
                     .height(99.dp)
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(CoverShape)
                     .background(PlaceholderPaper),
                 contentAlignment = Alignment.Center,
             ) {
@@ -1158,7 +1174,7 @@ private fun ContinueReadingCard(book: Book, onOpen: () -> Unit) {
                         modifier = Modifier
                             .weight(1f)
                             .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp)),
+                            .clip(RailShape),
                     )
                     Spacer(Modifier.width(10.dp))
                     Text(
@@ -1218,7 +1234,7 @@ private fun BookCard(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(0.667f)
-                .clip(RoundedCornerShape(6.dp))
+                .clip(CoverShape)
                 .background(PlaceholderPaper),
             contentAlignment = Alignment.Center,
         ) {
@@ -1303,7 +1319,7 @@ private fun BookCard(
                     .fillMaxWidth()
                     .padding(top = 6.dp)
                     .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp)),
+                    .clip(RailShape),
             )
         }
         Text(
