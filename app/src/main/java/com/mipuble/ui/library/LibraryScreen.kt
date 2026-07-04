@@ -89,6 +89,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -101,8 +102,8 @@ import com.mipuble.domain.model.Category
 import com.mipuble.domain.model.DownloadStatus
 import com.mipuble.domain.model.UploadProgress
 import com.mipuble.domain.sort.BookSortOption
+import com.mipuble.ui.theme.Eyebrow
 import java.io.File
-import kotlin.math.absoluteValue
 import kotlinx.coroutines.launch
 
 @Composable
@@ -401,22 +402,6 @@ private fun CategoryTag(
     )
 }
 
-/** Uppercase section label (Hanken 11/600, wide tracking) — the eyebrow style. */
-@Composable
-private fun Eyebrow(
-    text: String,
-    modifier: Modifier = Modifier,
-    color: Color = MaterialTheme.colorScheme.onSurfaceVariant,
-) {
-    Text(
-        text = text.uppercase(),
-        style = MaterialTheme.typography.labelSmall,
-        color = color,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = modifier,
-    )
-}
 
 /**
  * The navigation drawer: every category is a colored bookmark row (the active
@@ -1104,6 +1089,62 @@ private fun ShelfHeader(
     }
 }
 
+/** The fine 4dp accent progress rail shared by the grid cards and the hero. */
+@Composable
+private fun BookProgressRail(progress: Float, modifier: Modifier = Modifier) {
+    LinearProgressIndicator(
+        progress = { progress },
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+        strokeCap = StrokeCap.Round,
+        gapSize = 0.dp,
+        drawStopIndicator = NoStopIndicator,
+        modifier = modifier
+            .height(4.dp)
+            .clip(RailShape),
+    )
+}
+
+/**
+ * A book cover: the image when present, else a generated cover — the title set
+ * in cloth ink on cream paper. Ribbons/overlays layer on via [content].
+ */
+@Composable
+private fun BookCover(
+    book: Book,
+    titleStyle: TextStyle,
+    titlePadding: Dp,
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null,
+    content: @Composable BoxScope.() -> Unit = {},
+) {
+    Box(
+        modifier = modifier
+            .clip(CoverShape)
+            .background(PlaceholderPaper),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (book.coverPath != null) {
+            AsyncImage(
+                model = File(book.coverPath),
+                contentDescription = contentDescription,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text(
+                text = book.title,
+                style = titleStyle,
+                color = book.placeholderCoverColor(),
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(titlePadding),
+            )
+        }
+        content()
+    }
+}
+
 /** Horizontal hero surfacing the book to resume; tapping opens the reader. */
 @Composable
 private fun ContinueReadingCard(book: Book, onOpen: () -> Unit) {
@@ -1120,32 +1161,14 @@ private fun ContinueReadingCard(book: Book, onOpen: () -> Unit) {
                 .clickable(onClick = onOpen)
                 .padding(14.dp),
         ) {
-            Box(
+            BookCover(
+                book = book,
+                titleStyle = MaterialTheme.typography.labelMedium,
+                titlePadding = 6.dp,
                 modifier = Modifier
                     .width(66.dp)
-                    .height(99.dp)
-                    .clip(CoverShape)
-                    .background(PlaceholderPaper),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (book.coverPath != null) {
-                    AsyncImage(
-                        model = File(book.coverPath),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else {
-                    Text(
-                        text = book.title,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = book.placeholderCoverColor(),
-                        maxLines = 4,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(6.dp),
-                    )
-                }
-            }
+                    .height(99.dp),
+            )
             Spacer(Modifier.width(14.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -1164,18 +1187,7 @@ private fun ContinueReadingCard(book: Book, onOpen: () -> Unit) {
                 )
                 Spacer(Modifier.height(10.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    LinearProgressIndicator(
-                        progress = { book.progress },
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                        strokeCap = StrokeCap.Round,
-                        gapSize = 0.dp,
-                        drawStopIndicator = {},
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(4.dp)
-                            .clip(RailShape),
-                    )
+                    BookProgressRail(progress = book.progress, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(10.dp))
                     Text(
                         text = "${(book.progress * 100).toInt()}%",
@@ -1230,33 +1242,15 @@ private fun BookCard(
         // Not-yet-downloaded books read as dimmed until their bytes arrive.
         modifier = modifier.alpha(if (book.isDownloaded) 1f else 0.6f),
     ) {
-        Box(
+        BookCover(
+            book = book,
+            titleStyle = MaterialTheme.typography.titleSmall,
+            titlePadding = 10.dp,
+            contentDescription = "Cover of ${book.title}",
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.667f)
-                .clip(CoverShape)
-                .background(PlaceholderPaper),
-            contentAlignment = Alignment.Center,
+                .aspectRatio(0.667f),
         ) {
-            if (book.coverPath != null) {
-                AsyncImage(
-                    model = File(book.coverPath),
-                    contentDescription = "Cover of ${book.title}",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                // Generated cover: the title set in serif ink on cream paper.
-                Text(
-                    text = book.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = book.placeholderCoverColor(),
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(10.dp),
-                )
-            }
-
             // Category ribbon: a cloth bookmark flush to the cover's top edge.
             if (category != null) {
                 CategoryTag(
@@ -1308,18 +1302,11 @@ private fun BookCard(
             }
         }
         if (book.progress > 0f) {
-            LinearProgressIndicator(
-                progress = { book.progress },
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                strokeCap = StrokeCap.Round,
-                gapSize = 0.dp,
-                drawStopIndicator = {},
+            BookProgressRail(
+                progress = book.progress,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 6.dp)
-                    .height(4.dp)
-                    .clip(RailShape),
+                    .padding(top = 6.dp),
             )
         }
         Text(
@@ -1436,5 +1423,7 @@ private val coverPalette = listOf(
 /** The cream paper ground behind a generated placeholder cover. */
 private val PlaceholderPaper = Color(0xFFEFE6D4)
 
+// mod (not absoluteValue + %) — abs(Int.MIN_VALUE) is still negative and would
+// index out of bounds; floored mod is non-negative for any hash.
 private fun Book.placeholderCoverColor(): Color =
-    coverPalette[title.hashCode().absoluteValue % coverPalette.size]
+    coverPalette[title.hashCode().mod(coverPalette.size)]

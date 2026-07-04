@@ -3,6 +3,8 @@ package com.mipuble.ui.reader
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -112,7 +114,12 @@ private val ReaderTheme.displayLabel: String
 
 @Composable
 internal fun ThemeRow(selected: ReaderTheme, onSelect: (ReaderTheme) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+    // Scrollable so the 4x52dp swatches survive narrow/split-screen widths
+    // (inside Settings' card the row would otherwise hard-clip "Black").
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+    ) {
         ReaderTheme.entries.forEach { theme ->
             val colors = ReaderThemeColors.of(theme)
             val isSelected = theme == selected

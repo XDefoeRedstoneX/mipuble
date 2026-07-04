@@ -55,6 +55,7 @@ import com.mipuble.ui.reader.FontPickerRow
 import com.mipuble.ui.reader.PageTurnModeRow
 import com.mipuble.ui.reader.StepperRow
 import com.mipuble.ui.reader.ThemeRow
+import com.mipuble.ui.theme.Eyebrow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -300,9 +301,8 @@ private fun ResetToDriveDialog(
 @Composable
 private fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
     Column {
-        Text(
-            text = title.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
+        Eyebrow(
+            text = title,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(start = 4.dp, bottom = 8.dp),
         )

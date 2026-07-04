@@ -45,12 +45,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -69,6 +73,7 @@ fun ReaderScreen(
     val state by viewModel.state.collectAsStateWithLifecycle()
 
     ApplyBrightness(state.preferences)
+    ApplyStatusBarIcons(ReaderThemeColors.of(state.preferences.theme).background)
 
     ReaderContent(
         state = state,
@@ -114,6 +119,28 @@ private fun ApplyBrightness(preferences: ReaderPreferences) {
                 screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
             }
         }
+    }
+}
+
+/**
+ * Matches the status-bar icon style (light/dark) to the reader page while this
+ * screen shows, and restores the previous style on exit. Without it, a dark
+ * reader theme under system-light mode gets invisible dark icons (the reader
+ * background draws edge-to-edge under the bar, unlike the system-mode-driven
+ * Material background it replaced).
+ */
+@Composable
+private fun ApplyStatusBarIcons(pageBackground: Color) {
+    val view = LocalView.current
+    val darkIcons = pageBackground.luminance() > 0.5f
+
+    DisposableEffect(view, darkIcons) {
+        val window = view.context.findActivity()?.window
+            ?: return@DisposableEffect onDispose {}
+        val controller = WindowCompat.getInsetsController(window, view)
+        val previous = controller.isAppearanceLightStatusBars
+        controller.isAppearanceLightStatusBars = darkIcons
+        onDispose { controller.isAppearanceLightStatusBars = previous }
     }
 }
 
@@ -273,28 +300,33 @@ private fun ChapterRail(
     colors: ReaderThemeColors,
     modifier: Modifier = Modifier,
 ) {
-    // Weights must stay > 0, so keep the knob just inside either end.
-    val filled = fraction.coerceIn(0.001f, 0.999f)
-    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+    val filled = fraction.coerceIn(0f, 1f)
+    val railShape = RoundedCornerShape(2.dp)
+    Box(
+        modifier = modifier.height(12.dp),
+        contentAlignment = Alignment.CenterStart,
+    ) {
         Box(
             modifier = Modifier
-                .weight(filled)
+                .fillMaxWidth()
                 .height(4.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(colors.link),
+                .clip(railShape)
+                .background(colors.text.copy(alpha = 0.2f)),
         )
         Box(
             modifier = Modifier
+                .fillMaxWidth(filled)
+                .height(4.dp)
+                .clip(railShape)
+                .background(colors.link),
+        )
+        // Bias maps 0..1 to the ends of the rail with the knob fully inside.
+        Box(
+            modifier = Modifier
+                .align(BiasAlignment(horizontalBias = filled * 2f - 1f, verticalBias = 0f))
                 .size(12.dp)
                 .clip(CircleShape)
                 .background(colors.link),
-        )
-        Box(
-            modifier = Modifier
-                .weight(1f - filled)
-                .height(4.dp)
-                .clip(RoundedCornerShape(2.dp))
-                .background(colors.text.copy(alpha = 0.2f)),
         )
     }
 }

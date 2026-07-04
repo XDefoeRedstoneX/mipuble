@@ -3,6 +3,11 @@ package com.mipuble.ui.reader
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import com.mipuble.domain.model.PageTurnMode
+import com.mipuble.ui.theme.Accent
+import com.mipuble.ui.theme.AccentDark
+import com.mipuble.ui.theme.Ink
+import com.mipuble.ui.theme.InkBg
+import com.mipuble.ui.theme.Paper
 import com.mipuble.domain.model.ReaderFont
 import com.mipuble.domain.model.ReaderPreferences
 import com.mipuble.domain.model.ReaderTheme
@@ -15,11 +20,13 @@ data class ReaderThemeColors(
 ) {
     companion object {
         fun of(theme: ReaderTheme): ReaderThemeColors = when (theme) {
-            // Retuned to the warm "Paper & Ink" palette; LIGHT is warm paper, not white.
-            ReaderTheme.LIGHT -> ReaderThemeColors(Color(0xFFF5EFE4), Color(0xFF241F19), Color(0xFF3E6B54))
+            // The warm "Paper & Ink" palette. Brand tokens come from
+            // ui/theme/Color.kt so a retune there carries into the page; the
+            // remaining literals (SEPIA, page-only text tones) are reader-only.
+            ReaderTheme.LIGHT -> ReaderThemeColors(Paper, Ink, Accent)
             ReaderTheme.SEPIA -> ReaderThemeColors(Color(0xFFEFE4CE), Color(0xFF4A3D2A), Color(0xFF7A542E))
-            ReaderTheme.DARK -> ReaderThemeColors(Color(0xFF16130E), Color(0xFFD9D0C0), Color(0xFF93C2A2))
-            ReaderTheme.BLACK -> ReaderThemeColors(Color(0xFF000000), Color(0xFFB0B0B0), Color(0xFF93C2A2))
+            ReaderTheme.DARK -> ReaderThemeColors(InkBg, Color(0xFFD9D0C0), AccentDark)
+            ReaderTheme.BLACK -> ReaderThemeColors(Color(0xFF000000), Color(0xFFB0B0B0), AccentDark)
         }
     }
 }

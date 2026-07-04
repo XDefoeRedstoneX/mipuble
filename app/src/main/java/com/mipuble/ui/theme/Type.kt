@@ -102,6 +102,8 @@ val Typography = Typography(
         fontSize = 13.sp,
         lineHeight = 16.sp,
     ),
+    // labelSmall doubles as the "eyebrow" style; render it via the shared
+    // Eyebrow composable (ui/theme/Eyebrow.kt) rather than styling by hand.
     labelSmall = TextStyle(
         fontFamily = Hanken,
         fontWeight = FontWeight.SemiBold,
@@ -110,10 +112,3 @@ val Typography = Typography(
         letterSpacing = 0.15.em,
     ),
 )
-
-/**
- * Uppercase section label ("eyebrow") — Hanken 11/600 with wide tracking. Pair
- * with `.uppercase()` on the text and tint with `ink3` (or `accent`) at the call
- * site. Mirrors [Typography.labelSmall] but named for intent.
- */
-val eyebrow: TextStyle = Typography.labelSmall
