@@ -8,6 +8,9 @@ interface CategoryRepository {
 
     suspend fun createCategory(name: String, colorArgb: Int): Long
 
+    /** Returns the id of the category named [name], creating it (with [colorArgb]) if absent. */
+    suspend fun ensureCategory(name: String, colorArgb: Int): Long
+
     /** Renames and/or recolors an existing category. */
     suspend fun updateCategory(id: Long, name: String, colorArgb: Int)
 

@@ -23,6 +23,9 @@ class CategoryUseCasesTest {
             return 1L
         }
 
+        override suspend fun ensureCategory(name: String, colorArgb: Int): Long =
+            createCategory(name, colorArgb)
+
         override suspend fun updateCategory(id: Long, name: String, colorArgb: Int) {
             updated = Triple(id, name, colorArgb)
         }

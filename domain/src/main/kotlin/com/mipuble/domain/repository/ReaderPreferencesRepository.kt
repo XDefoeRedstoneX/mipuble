@@ -17,4 +17,5 @@ interface ReaderPreferencesRepository {
     suspend fun setFollowSystemBrightness(enabled: Boolean)
     suspend fun setFont(font: ReaderFont)
     suspend fun setPageTurnMode(mode: PageTurnMode)
+    suspend fun setAutoShelveBySeries(enabled: Boolean)
 }

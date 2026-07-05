@@ -23,6 +23,7 @@ import com.mipuble.domain.usecase.ObserveLibraryUseCase
 import com.mipuble.domain.usecase.ObserveReviewQueueUseCase
 import com.mipuble.domain.usecase.ObserveUploadsUseCase
 import com.mipuble.domain.usecase.QueueBooksForReviewUseCase
+import com.mipuble.domain.usecase.RenameBookUseCase
 import com.mipuble.domain.usecase.ResolveReviewUseCase
 import com.mipuble.domain.usecase.SaveCustomOrderUseCase
 import com.mipuble.domain.usecase.SearchCatalogUseCase
@@ -75,11 +76,13 @@ class LibraryViewModelTest {
         override suspend fun applyCanonicalName(bookId: Long, canonicalSeries: String) = Unit
         override suspend fun dismissReview(bookId: Long) = Unit
         override suspend fun markForReview(bookId: Long, suggestions: List<String>) = Unit
+        override suspend fun renameBook(bookId: Long, title: String, dedupKey: String?) = Unit
     }
 
     private class FakeCategoryRepository : CategoryRepository {
         override fun observeCategories(): Flow<List<Category>> = MutableStateFlow(emptyList())
         override suspend fun createCategory(name: String, colorArgb: Int): Long = 1L
+        override suspend fun ensureCategory(name: String, colorArgb: Int): Long = 1L
         override suspend fun updateCategory(id: Long, name: String, colorArgb: Int) = Unit
         override suspend fun deleteCategory(id: Long) = Unit
     }
@@ -87,6 +90,20 @@ class LibraryViewModelTest {
     private class FakeCatalogRepository : com.mipuble.domain.repository.CatalogRepository {
         override suspend fun catalog() = com.mipuble.domain.title.SeriesCatalog(emptyList())
         override suspend fun addSeries(name: String) = Unit
+    }
+
+    private class FakePreferencesRepository :
+        com.mipuble.domain.repository.ReaderPreferencesRepository {
+        override val preferences =
+            MutableStateFlow(com.mipuble.domain.model.ReaderPreferences())
+        override suspend fun setTheme(theme: com.mipuble.domain.model.ReaderTheme) = Unit
+        override suspend fun setFontScalePercent(value: Int) = Unit
+        override suspend fun setLineSpacingPercent(value: Int) = Unit
+        override suspend fun setBrightnessPercent(value: Int) = Unit
+        override suspend fun setFollowSystemBrightness(enabled: Boolean) = Unit
+        override suspend fun setFont(font: com.mipuble.domain.model.ReaderFont) = Unit
+        override suspend fun setPageTurnMode(mode: com.mipuble.domain.model.PageTurnMode) = Unit
+        override suspend fun setAutoShelveBySeries(enabled: Boolean) = Unit
     }
 
     private class FakeRemoteRepository : RemoteLibraryRepository {
@@ -135,10 +152,16 @@ class LibraryViewModelTest {
             evictBook = EvictBookUseCase(remoteRepository),
             deleteBook = DeleteBookUseCase(remoteRepository),
             observeReviewQueue = ObserveReviewQueueUseCase(bookRepository),
-            resolveReview = ResolveReviewUseCase(bookRepository, FakeCatalogRepository()),
+            resolveReview = ResolveReviewUseCase(
+                bookRepository,
+                FakeCatalogRepository(),
+                categoryRepository,
+                FakePreferencesRepository(),
+            ),
             dismissReview = DismissReviewUseCase(bookRepository),
             searchCatalog = SearchCatalogUseCase(FakeCatalogRepository()),
             queueBooksForReview = QueueBooksForReviewUseCase(bookRepository, FakeCatalogRepository()),
+            renameBook = RenameBookUseCase(bookRepository, categoryRepository),
             driveAuthProvider = UnconfiguredDriveAuthProvider(),
         )
     }

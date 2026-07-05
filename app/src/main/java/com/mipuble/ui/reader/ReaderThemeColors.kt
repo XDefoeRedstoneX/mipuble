@@ -2,7 +2,6 @@ package com.mipuble.ui.reader
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import com.mipuble.domain.model.PageTurnMode
 import com.mipuble.ui.theme.Accent
 import com.mipuble.ui.theme.AccentDark
 import com.mipuble.ui.theme.Ink
@@ -82,30 +81,14 @@ private fun fontCss(font: ReaderFont): String {
 }
 
 /**
- * Lays the chapter out in screen-width CSS columns so horizontal swipes can
- * page through it; vertical overflow is what spills into the next column.
- */
-private const val PAGED_CSS = """
-    /* Clip vertical scrolling on the document, but let the body's columns
-       overflow horizontally so the WebView's horizontal scroll range grows —
-       that range is what the pager scrolls through. (A previous `overflow:
-       hidden` on the body clipped the columns, leaving range 0 so every swipe
-       jumped a chapter.) */
-    html { height: 100vh !important; overflow-y: hidden !important; }
-    body {
-        height: 100vh !important;
-        column-width: 100vw !important;
-        column-gap: 0 !important;
-        column-fill: auto !important;
-        box-sizing: border-box !important;
-    }
-"""
-
-/**
  * Builds the override stylesheet injected into every chapter. Font size is
  * handled separately via WebView.textZoom; this controls colors, typeface,
- * line spacing, page layout, comfortable margins, and image fit. `!important`
- * ensures it wins over the book's own CSS.
+ * line spacing, comfortable margins, and image fit. `!important` ensures it
+ * wins over the book's own CSS.
+ *
+ * Paged reading is NOT done with CSS columns (that was fragile in WebView);
+ * the chapter reflows normally and the reader snap-scrolls it one viewport at a
+ * time — so this stylesheet is the same in both page-turn modes.
  */
 fun readerOverrideCss(preferences: ReaderPreferences): String {
     val colors = ReaderThemeColors.of(preferences.theme)
@@ -113,19 +96,12 @@ fun readerOverrideCss(preferences: ReaderPreferences): String {
     val fg = colors.text.toCssHex()
     val link = colors.link.toCssHex()
     val lineHeight = preferences.lineSpacingPercent / 100f
-    val paged = if (preferences.pageTurnMode == PageTurnMode.PAGED) PAGED_CSS else ""
     return """
         html, body { background-color: $bg !important; color: $fg !important; }
         body { line-height: $lineHeight !important; padding: 2vh 7% !important; margin: 0 !important; }
         p, li, div, span { color: $fg !important; }
         a { color: $link !important; }
-        img, svg {
-            max-width: 100% !important;
-            max-height: 100vh !important;
-            height: auto !important;
-            object-fit: contain !important;
-        }
+        img, svg { max-width: 100% !important; height: auto !important; }
         ${fontCss(preferences.font)}
-        $paged
     """.trimIndent()
 }

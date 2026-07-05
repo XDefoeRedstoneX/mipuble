@@ -10,7 +10,7 @@ class TitleNormalizerTest {
     fun `strips tags and extracts volume`() {
         val n = TitleNormalizer.normalize("xxx Vol 1 [Premium]{Translated}")
         assertEquals("xxx", n.series)
-        assertEquals(1, n.volume)
+        assertEquals("1", n.volume)
         assertEquals("xxx, Vol. 1", n.displayTitle)
         assertEquals("xxx|1", n.dedupKey)
     }
@@ -19,9 +19,21 @@ class TitleNormalizerTest {
     fun `drops trailing junk after the volume`() {
         val n = TitleNormalizer.normalize("xxx v2 - rahhh")
         assertEquals("xxx", n.series)
-        assertEquals(2, n.volume)
+        assertEquals("2", n.volume)
         assertEquals("xxx, Vol. 2", n.displayTitle)
         assertEquals("xxx|2", n.dedupKey)
+    }
+
+    @Test
+    fun `decimal and comma volumes are supported`() {
+        val dot = TitleNormalizer.normalize("Spice and Wolf Vol 1.5")
+        assertEquals("1.5", dot.volume)
+        assertEquals("Spice and Wolf, Vol. 1.5", dot.displayTitle)
+        assertEquals("spiceandwolf|1.5", dot.dedupKey)
+
+        // Comma is normalized to a dot, and trailing zeros are dropped.
+        assertEquals("1.5", TitleNormalizer.normalize("xxx v1,5").volume)
+        assertEquals("1", TitleNormalizer.normalize("xxx v1.0").volume)
     }
 
     @Test
@@ -43,36 +55,36 @@ class TitleNormalizerTest {
     fun `key ignores case and punctuation in the series`() {
         val a = TitleNormalizer.normalize("Re:Zero v05 (Yen Press)")
         val b = TitleNormalizer.normalize("re zero vol. 5")
-        assertEquals(5, a.volume)
+        assertEquals("5", a.volume)
         assertEquals("Re:Zero", a.series)
         assertEquals(a.dedupKey, b.dedupKey)
     }
 
     @Test
     fun `leading zeros normalize to the same number`() {
-        assertEquals(5, TitleNormalizer.normalize("Series v05").volume)
+        assertEquals("5", TitleNormalizer.normalize("Series v05").volume)
         assertEquals("series|5", TitleNormalizer.normalize("Series v05").dedupKey)
     }
 
     @Test
     fun `hash markers count as volumes`() {
-        assertEquals(3, TitleNormalizer.normalize("Some Comic #3").volume)
+        assertEquals("3", TitleNormalizer.normalize("Some Comic #3").volume)
     }
 
     @Test
     fun `existing tidy titles are preserved`() {
         val n = TitleNormalizer.normalize("The Glass Archivist, Vol. 10")
         assertEquals("The Glass Archivist", n.series)
-        assertEquals(10, n.volume)
+        assertEquals("10", n.volume)
         assertEquals("The Glass Archivist, Vol. 10", n.displayTitle)
     }
 
     @Test
-    fun `volume-less standalone has no dedup key`() {
+    fun `a volume-less standalone dedups by name so same-named copies collapse`() {
         val n = TitleNormalizer.normalize("Piranesi")
         assertEquals("Piranesi", n.series)
         assertNull(n.volume)
-        assertNull(n.dedupKey)
+        assertEquals("piranesi", n.dedupKey)
         assertEquals("Piranesi", n.displayTitle)
     }
 
@@ -85,8 +97,8 @@ class TitleNormalizerTest {
     @Test
     fun `volumeForConfirmed recovers a bare trailing volume once the series is known`() {
         // The review-confirm path: the series is settled, so a bare number is a volume.
-        assertEquals(12, TitleNormalizer.volumeForConfirmed("Bleach 12", "Bleach"))
-        assertEquals(4, TitleNormalizer.volumeForConfirmed("Spice and Wolf, Vol. 4", "Spice and Wolf"))
+        assertEquals("12", TitleNormalizer.volumeForConfirmed("Bleach 12", "Bleach"))
+        assertEquals("4", TitleNormalizer.volumeForConfirmed("Spice and Wolf, Vol. 4", "Spice and Wolf"))
         // A number that's part of the official name is not a volume.
         assertNull(TitleNormalizer.volumeForConfirmed("Mob Psycho 100", "Mob Psycho 100"))
         // A volume-less standalone stays volume-less.
@@ -94,14 +106,24 @@ class TitleNormalizerTest {
     }
 
     @Test
-    fun `titles ending in a number are not mangled into volumes`() {
+    fun `titles ending in a number keep the number in the name, not a volume`() {
         val a = TitleNormalizer.normalize("Fahrenheit 451")
         assertNull(a.volume)
         assertEquals("Fahrenheit 451", a.displayTitle)
-        assertNull(a.dedupKey)
+        // Volume-less, so the dedup key is the name key (not null).
+        assertEquals("fahrenheit451", a.dedupKey)
 
         val b = TitleNormalizer.normalize("Catch 22")
         assertNull(b.volume)
         assertEquals("Catch 22", b.displayTitle)
+    }
+
+    @Test
+    fun `canonicalVolume normalizes raw user input`() {
+        assertEquals("1", TitleNormalizer.canonicalVolume("01"))
+        assertEquals("1.5", TitleNormalizer.canonicalVolume("1,5"))
+        assertEquals("1", TitleNormalizer.canonicalVolume("1.0"))
+        assertEquals("10", TitleNormalizer.canonicalVolume("Vol 10"))
+        assertNull(TitleNormalizer.canonicalVolume("none"))
     }
 }

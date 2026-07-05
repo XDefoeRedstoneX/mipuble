@@ -34,6 +34,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -149,6 +150,16 @@ fun SettingsScreen(
                     value = "%.1f".format(uiState.preferences.lineSpacingPercent / 100f),
                     onDecrease = { viewModel.onStepLineSpacing(-1) },
                     onIncrease = { viewModel.onStepLineSpacing(+1) },
+                )
+            }
+
+            SettingsSection("Library") {
+                ToggleRow(
+                    label = "Shelve reviewed books by series",
+                    description = "When you confirm a book's name, file it into a bookmark " +
+                        "named after its series (created automatically).",
+                    checked = uiState.preferences.autoShelveBySeries,
+                    onCheckedChange = viewModel::onToggleAutoShelve,
                 )
             }
 
@@ -316,6 +327,28 @@ private fun SettingsSection(title: String, content: @Composable ColumnScope.() -
             verticalArrangement = Arrangement.spacedBy(14.dp),
             content = content,
         )
+    }
+}
+
+/** A labelled on/off setting: a title + helper text on the left, a switch on the right. */
+@Composable
+private fun ToggleRow(
+    label: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Spacer(Modifier.width(12.dp))
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 

@@ -9,6 +9,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -20,6 +22,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,7 +33,6 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -83,6 +85,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -102,6 +106,7 @@ import com.mipuble.domain.model.Category
 import com.mipuble.domain.model.DownloadStatus
 import com.mipuble.domain.model.UploadProgress
 import com.mipuble.domain.sort.BookSortOption
+import com.mipuble.domain.title.TitleNormalizer
 import com.mipuble.ui.theme.Eyebrow
 import java.io.File
 import kotlinx.coroutines.launch
@@ -168,6 +173,7 @@ fun LibraryScreen(
 
     var assigningBook by remember { mutableStateOf<Book?>(null) }
     var deletingBook by remember { mutableStateOf<Book?>(null) }
+    var renamingBook by remember { mutableStateOf<Book?>(null) }
     var editingCategory by remember { mutableStateOf<Category?>(null) }
     var creatingCategory by remember { mutableStateOf(false) }
     var showReview by remember { mutableStateOf(false) }
@@ -256,6 +262,10 @@ fun LibraryScreen(
                 viewModel.onEvict(book.id)
                 assigningBook = null
             },
+            onRename = {
+                assigningBook = null
+                renamingBook = book
+            },
             onDelete = {
                 assigningBook = null
                 deletingBook = book
@@ -272,6 +282,17 @@ fun LibraryScreen(
                 deletingBook = null
             },
             onDismiss = { deletingBook = null },
+        )
+    }
+
+    renamingBook?.let { book ->
+        RenameBookDialog(
+            book = book,
+            onConfirm = { series, volume, addToBookmark ->
+                viewModel.onRenameBook(book.id, series, volume, addToBookmark)
+                renamingBook = null
+            },
+            onDismiss = { renamingBook = null },
         )
     }
 
@@ -374,18 +395,11 @@ private val RailShape = RoundedCornerShape(2.dp)
 private val CardShape = RoundedCornerShape(14.dp)
 private val NoStopIndicator: DrawScope.() -> Unit = {}
 
-/** The cloth-bookmark silhouette — a rectangle with a downward notch cut into
- *  its bottom edge. The signature shape of the whole category system. */
-private val TagShape = GenericShape { size, _ ->
-    val notch = size.height * 0.28f
-    moveTo(0f, 0f)
-    lineTo(size.width, 0f)
-    lineTo(size.width, size.height)
-    lineTo(size.width / 2f, size.height - notch)
-    lineTo(0f, size.height)
-    close()
-}
-
+/**
+ * The cloth-bookmark silhouette: a rectangle with a downward notch in its bottom
+ * edge — the signature shape of the category system. Drawn directly (no clip
+ * layer) so a long, fast-scrolling bookmark list stays smooth.
+ */
 @Composable
 private fun CategoryTag(
     color: Color,
@@ -397,8 +411,19 @@ private fun CategoryTag(
         modifier = modifier
             .width(width)
             .height(height)
-            .clip(TagShape)
-            .background(color),
+            .drawBehind {
+                // Downward-notched cloth bookmark, drawn directly (no clip layer).
+                val notch = size.height * 0.28f
+                val path = Path().apply {
+                    moveTo(0f, 0f)
+                    lineTo(size.width, 0f)
+                    lineTo(size.width, size.height)
+                    lineTo(size.width / 2f, size.height - notch)
+                    lineTo(0f, size.height)
+                    close()
+                }
+                drawPath(path, color)
+            },
     )
 }
 
@@ -762,6 +787,7 @@ private fun AssignCategoryDialog(
     categories: List<Category>,
     onAssign: (Long?) -> Unit,
     onEvict: () -> Unit,
+    onRename: () -> Unit,
     onDelete: () -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -771,21 +797,32 @@ private fun AssignCategoryDialog(
         title = { Text(book.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
             Column {
-                CategoryChoiceRow(
-                    label = "No category",
-                    selected = book.categoryId == null,
-                    color = null,
-                    onClick = { onAssign(null) },
-                )
-                categories.forEach { category ->
+                // The category list scrolls within a bounded height so the
+                // Rename/Delete actions below it always stay reachable.
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 260.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
                     CategoryChoiceRow(
-                        label = category.name,
-                        selected = book.categoryId == category.id,
-                        color = Color(category.colorArgb),
-                        onClick = { onAssign(category.id) },
+                        label = "No category",
+                        selected = book.categoryId == null,
+                        color = null,
+                        onClick = { onAssign(null) },
                     )
+                    categories.forEach { category ->
+                        CategoryChoiceRow(
+                            label = category.name,
+                            selected = book.categoryId == category.id,
+                            color = Color(category.colorArgb),
+                            onClick = { onAssign(category.id) },
+                        )
+                    }
                 }
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                TextButton(onClick = onRename) {
+                    Text("Rename book…")
+                }
                 TextButton(onClick = onDelete) {
                     Text("Delete book…", color = MaterialTheme.colorScheme.error)
                 }
@@ -840,6 +877,59 @@ private fun DeleteBookDialog(
             TextButton(onClick = { onConfirm(alsoFromDrive) }) {
                 Text("Delete", color = MaterialTheme.colorScheme.error)
             }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+/**
+ * Manual rename: splits the current title into editable series + volume fields
+ * (volume accepts decimals like "1.5"), with an opt-in to file it on a per-series
+ * bookmark. Pre-filled by re-parsing the book's current title.
+ */
+@Composable
+private fun RenameBookDialog(
+    book: Book,
+    onConfirm: (series: String, volume: String?, addToBookmark: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val parsed = remember(book.id) { TitleNormalizer.normalize(book.title) }
+    var series by remember(book.id) { mutableStateOf(parsed.series) }
+    var volume by remember(book.id) { mutableStateOf(parsed.volume ?: "") }
+    var addToBookmark by remember(book.id) { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Rename book") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = series,
+                    onValueChange = { series = it },
+                    label = { Text("Series name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = volume,
+                    onValueChange = { volume = it },
+                    label = { Text("Volume (optional, e.g. 1.5)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = addToBookmark, onCheckedChange = { addToBookmark = it })
+                    Text("Add to bookmark")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(series.trim(), volume.trim().ifBlank { null }, addToBookmark) },
+                enabled = series.isNotBlank(),
+            ) { Text("Save") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }

@@ -47,6 +47,7 @@ class ObserveLibraryUseCaseTest {
         override suspend fun applyCanonicalName(bookId: Long, canonicalSeries: String) = Unit
         override suspend fun dismissReview(bookId: Long) = Unit
         override suspend fun markForReview(bookId: Long, suggestions: List<String>) = Unit
+        override suspend fun renameBook(bookId: Long, title: String, dedupKey: String?) = Unit
     }
 
     private val useCase = ObserveLibraryUseCase(repositoryOf(library))

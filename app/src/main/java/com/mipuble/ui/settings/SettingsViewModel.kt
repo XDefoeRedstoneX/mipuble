@@ -129,6 +129,10 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { preferencesRepository.setPageTurnMode(mode) }
     }
 
+    fun onToggleAutoShelve(enabled: Boolean) {
+        viewModelScope.launch { preferencesRepository.setAutoShelveBySeries(enabled) }
+    }
+
     fun onStepFont(direction: Int) {
         viewModelScope.launch {
             preferencesRepository.setFontScalePercent(

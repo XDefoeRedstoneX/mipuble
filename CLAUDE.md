@@ -82,3 +82,40 @@ CI (`.github/workflows/ci.yml`) runs lint + unit tests + assembleDebug on every 
   `domain` extracted to a pure-JVM `:domain` Gradle module (boundary now
   enforced, not conventional). LibraryViewModel covered by JVM tests via a
   `MainDispatcherRule`; README gained a from-zero install guide.
+
+## Backlog (deferred — do not implement until asked)
+
+Done (was backlog):
+- **Sidebar scroll** ✅ `CategoryTag` now draws its bookmark silhouette via
+  `drawBehind`/`drawPath` instead of `clip(GenericShape)` (no per-row clip
+  layer), so a long auto-shelved bookmark list scrolls cheaper. Strong-skipping
+  (Kotlin 2.0) already minimizes recomposition. If it's still janky with
+  hundreds of bookmarks, the deeper fix is replacing Material
+  `NavigationDrawerItem` with a lighter custom row — wants device profiling.
+- **AssignCategoryDialog scroll** ✅ The category list now scrolls within a
+  bounded height (`heightIn(max=260.dp)` + `verticalScroll`) so the Rename/Delete
+  actions below it stay reachable.
+- **Decimal/comma volumes** ✅ Volume is now a canonical `String` in
+  `TitleNormalizer` ("Vol 1.5", "v1,5" → "1.5"); dedup key is `seriesKey|volume`.
+- **Dedup gap (same-name copies)** ✅ Volume-less books now dedup by name key
+  (`dedupKeyFor` returns the series key when there's no volume), so same-named
+  copies collapse. NOTE: forward-only — existing rows keep their old null keys
+  until re-imported/renamed. Cross-language same-volume dupes (different
+  romanization) still rely on catalog matching, not key logic.
+- **Manual rename** ✅ Long-press → "Rename book…" → `RenameBookDialog` (series +
+  decimal volume fields + "Add to bookmark") → `RenameBookUseCase`.
+
+Reader (reworked — awaiting on-device confirmation):
+- Paged mode was rebuilt as **vertical snap-paging**: CSS columns removed
+  entirely (`PAGED_CSS` gone), the chapter reflows normally, and a swipe
+  snap-scrolls one viewport at a time (`turnPage`/`PagingWebView.maxScrollY` in
+  `ReaderScreen.kt`). This sidesteps the fragile WebView multicolumn layout that
+  broke repeatedly.
+- The bottom bar now shows a **real page count** (`p. X/Y`) computed from the
+  rendered content height, not the chapter number. NOTE: per-chapter pages, not
+  a whole-book total — whole-book would need pre-rendering every chapter.
+- Chrome (header/footer) now **overlays** the WebView instead of reserving space
+  via `Scaffold` slots — toggling controls no longer resizes/reflows the page
+  (which snapped scroll to the top). `ReaderContent` is a `Box` with the bars in
+  `AnimatedVisibility` aligned top/bottom.
+- Both need a device check (no emulator here); revert/iterate if off.

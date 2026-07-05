@@ -14,6 +14,9 @@ interface CategoryDao {
     @Insert
     suspend fun insert(category: CategoryEntity): Long
 
+    @Query("SELECT * FROM categories WHERE name = :name COLLATE NOCASE LIMIT 1")
+    suspend fun findByName(name: String): CategoryEntity?
+
     @Query("UPDATE categories SET name = :name, color_argb = :colorArgb WHERE id = :id")
     suspend fun update(id: Long, name: String, colorArgb: Int)
 

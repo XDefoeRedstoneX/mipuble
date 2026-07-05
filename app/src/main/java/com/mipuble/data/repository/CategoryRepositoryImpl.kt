@@ -21,6 +21,9 @@ class CategoryRepositoryImpl @Inject constructor(
     override suspend fun createCategory(name: String, colorArgb: Int): Long =
         categoryDao.insert(CategoryEntity(name = name, colorArgb = colorArgb))
 
+    override suspend fun ensureCategory(name: String, colorArgb: Int): Long =
+        categoryDao.findByName(name)?.id ?: createCategory(name, colorArgb)
+
     override suspend fun updateCategory(id: Long, name: String, colorArgb: Int) =
         categoryDao.update(id, name, colorArgb)
 
