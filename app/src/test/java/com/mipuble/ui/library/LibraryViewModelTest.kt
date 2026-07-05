@@ -195,6 +195,25 @@ class LibraryViewModelTest {
     }
 
     @Test
+    fun `continue reading picks the furthest-along open downloaded book`() = runTest {
+        bookRepository.books.value = listOf(
+            book(1, "A").copy(progress = 0.2f, filePath = "/a"),
+            book(2, "B").copy(progress = 0.8f, filePath = "/b"),
+            book(3, "C").copy(progress = 1f, filePath = "/c"),      // finished — excluded
+            book(4, "D").copy(progress = 0.5f, filePath = null),    // not downloaded — excluded
+            book(5, "E"),                                            // untouched — excluded
+        )
+        val vm = viewModel()
+        val collector = launch { vm.uiState.collect {} }
+        advanceUntilIdle()
+
+        assertEquals(2L, vm.uiState.value.continueReading?.id)
+        assertEquals(5, vm.uiState.value.libraryCount)
+
+        collector.cancel()
+    }
+
+    @Test
     fun `a failed import surfaces a user-facing message`() = runTest {
         bookRepository.importResult = Result.failure(RuntimeException("boom"))
         val vm = viewModel()

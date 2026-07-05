@@ -122,9 +122,14 @@ troubleshooting — is in **[docs/GOOGLE_DRIVE_SETUP.md](docs/GOOGLE_DRIVE_SETUP
 
 ## Bundled fonts
 
-The reader ships three optional typefaces, all licensed under the
+The reader ships three optional reading typefaces, all licensed under the
 [SIL Open Font License 1.1](https://openfontlicense.org):
 [Literata](https://github.com/googlefonts/literata) (© The Literata Project),
 [Inter](https://github.com/rsms/inter) (© Rasmus Andersson), and
 [Atkinson Hyperlegible](https://www.brailleinstitute.org/freefont/)
 (© Braille Institute of America).
+
+The app chrome ("Paper & Ink" theme) uses two more OFL-licensed families,
+bundled under `res/font/`: [Literata](https://github.com/googlefonts/literata)
+for editorial titles and [Hanken Grotesk](https://github.com/hanken-cs/hanken-grotesk)
+(© Hanken Design Co.) for UI and body text.

@@ -50,6 +50,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,6 +59,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.NavigationDrawerItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -67,6 +69,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -81,11 +84,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -95,8 +102,8 @@ import com.mipuble.domain.model.Category
 import com.mipuble.domain.model.DownloadStatus
 import com.mipuble.domain.model.UploadProgress
 import com.mipuble.domain.sort.BookSortOption
+import com.mipuble.ui.theme.Eyebrow
 import java.io.File
-import kotlin.math.absoluteValue
 import kotlinx.coroutines.launch
 
 @Composable
@@ -170,6 +177,7 @@ fun LibraryScreen(
         drawerContent = {
             CategoryDrawer(
                 categories = uiState.categories,
+                bookCount = uiState.libraryCount,
                 selectedId = uiState.selectedCategoryId,
                 onSelect = { id ->
                     viewModel.onCategorySelected(id)
@@ -304,16 +312,19 @@ private fun UploadBanner(progress: UploadProgress) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 18.dp, vertical = 10.dp),
     ) {
+        Eyebrow(if (progress.scanning) "Scanning" else "Uploading")
+        Spacer(Modifier.height(4.dp))
         Text(
             text = if (progress.scanning) {
                 "Scanning folder…"
             } else {
-                "Uploading ${progress.currentIndex}/${progress.total}: ${progress.fileName}"
+                "${progress.currentIndex}/${progress.total} · ${progress.fileName}"
             },
             style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
@@ -337,46 +348,60 @@ private fun ReviewBanner(count: Int, onClick: () -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .background(MaterialTheme.colorScheme.tertiaryContainer)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .background(MaterialTheme.colorScheme.primaryContainer)
+            .padding(horizontal = 18.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = if (count == 1) "1 book needs a name check" else "$count books need a name check",
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
             modifier = Modifier.weight(1f),
         )
         Text(
             "Review",
             style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onTertiaryContainer,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
             fontWeight = FontWeight.Bold,
         )
     }
 }
 
-/** The tag/bookmark silhouette used for category rows — points right. */
+// Shapes and lambdas used inside grid items — hoisted so cards scrolling into
+// view don't reallocate them on every composition.
+private val CoverShape = RoundedCornerShape(6.dp)
+private val RailShape = RoundedCornerShape(2.dp)
+private val CardShape = RoundedCornerShape(14.dp)
+private val NoStopIndicator: DrawScope.() -> Unit = {}
+
+/** The cloth-bookmark silhouette — a rectangle with a downward notch cut into
+ *  its bottom edge. The signature shape of the whole category system. */
 private val TagShape = GenericShape { size, _ ->
-    val notch = size.width * 0.3f
+    val notch = size.height * 0.28f
     moveTo(0f, 0f)
-    lineTo(size.width - notch, 0f)
-    lineTo(size.width, size.height / 2f)
-    lineTo(size.width - notch, size.height)
+    lineTo(size.width, 0f)
+    lineTo(size.width, size.height)
+    lineTo(size.width / 2f, size.height - notch)
     lineTo(0f, size.height)
     close()
 }
 
 @Composable
-private fun CategoryTag(color: Color, modifier: Modifier = Modifier) {
+private fun CategoryTag(
+    color: Color,
+    modifier: Modifier = Modifier,
+    width: Dp = 22.dp,
+    height: Dp = 30.dp,
+) {
     Box(
         modifier = modifier
-            .width(26.dp)
-            .height(16.dp)
+            .width(width)
+            .height(height)
             .clip(TagShape)
             .background(color),
     )
 }
+
 
 /**
  * The navigation drawer: every category is a colored bookmark row (the active
@@ -385,6 +410,7 @@ private fun CategoryTag(color: Color, modifier: Modifier = Modifier) {
 @Composable
 private fun CategoryDrawer(
     categories: List<Category>,
+    bookCount: Int,
     selectedId: Long?,
     onSelect: (Long?) -> Unit,
     onEdit: (Category) -> Unit,
@@ -393,14 +419,29 @@ private fun CategoryDrawer(
     onSelectToReview: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
-    ModalDrawerSheet {
-        Text(
-            text = "mipuble",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = 28.dp, vertical = 20.dp),
-        )
-        HorizontalDivider()
+    // Accent-tinted highlight for the active shelf; hairline ribbon for the rest.
+    val itemColors = NavigationDrawerItemDefaults.colors(
+        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+        selectedTextColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+    )
+
+    ModalDrawerSheet(drawerContainerColor = MaterialTheme.colorScheme.surface) {
+        Column(modifier = Modifier.padding(horizontal = 28.dp, vertical = 20.dp)) {
+            Text(
+                text = "mipuble",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = "$bookCount ${plural(bookCount, "book")} · " +
+                    "${categories.size} ${plural(categories.size, "shelf", "shelves")}",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
         LazyColumn(
             modifier = Modifier.weight(1f),
@@ -412,19 +453,33 @@ private fun CategoryDrawer(
                     icon = {
                         CategoryTag(
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                            width = 18.dp,
+                            height = 24.dp,
                         )
                     },
+                    colors = itemColors,
                     selected = selectedId == null,
                     onClick = { onSelect(null) },
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
+            }
+            if (categories.isNotEmpty()) {
+                item {
+                    Eyebrow(
+                        text = "Shelves",
+                        modifier = Modifier.padding(start = 28.dp, top = 12.dp, bottom = 4.dp),
+                    )
+                }
             }
             items(categories, key = { it.id }) { category ->
                 NavigationDrawerItem(
                     label = {
                         Text(category.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     },
-                    icon = { CategoryTag(color = Color(category.colorArgb)) },
+                    icon = {
+                        CategoryTag(color = Color(category.colorArgb), width = 18.dp, height = 24.dp)
+                    },
+                    colors = itemColors,
                     badge = {
                         IconButton(onClick = { onEdit(category) }) {
                             Icon(
@@ -441,10 +496,16 @@ private fun CategoryDrawer(
             }
         }
 
-        HorizontalDivider()
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         NavigationDrawerItem(
             label = { Text("Create category") },
-            icon = { Icon(Icons.Default.Add, contentDescription = null) },
+            icon = {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            },
             selected = false,
             onClick = onCreate,
             modifier = Modifier.padding(horizontal = 12.dp),
@@ -515,7 +576,14 @@ fun LibraryContent(
                 )
             } else {
                 TopAppBar(
-                    title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    title = {
+                        Text(
+                            title,
+                            style = MaterialTheme.typography.headlineSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
                     navigationIcon = {
                         IconButton(onClick = onOpenDrawer) {
                             Icon(Icons.Default.Menu, contentDescription = "Open categories")
@@ -537,13 +605,18 @@ fun LibraryContent(
                                 Icon(Icons.Default.Refresh, contentDescription = "Sync remote library")
                             }
                         }
-                        SortMenu(selected = uiState.sortOption, onSortSelected = onSortSelected)
                     },
                 )
             }
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = onImportClick) {
+            FloatingActionButton(
+                onClick = onImportClick,
+                shape = RoundedCornerShape(19.dp),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 8.dp),
+            ) {
                 Icon(Icons.Default.Add, contentDescription = "Import EPUB")
             }
         },
@@ -559,6 +632,26 @@ fun LibraryContent(
             if (uiState.reviewQueue.isNotEmpty()) {
                 ReviewBanner(count = uiState.reviewQueue.size, onClick = onReviewClick)
             }
+
+            // Hero + shelf header ride above the grid (kept out of the grid so the
+            // reorder index space stays untouched). The hero is only shown in the
+            // unfiltered "All books" view, matching where it's sourced from. The
+            // header stays visible on an empty shelf — it hosts the app's only
+            // sort control, which must remain reachable to leave "My order".
+            if (!uiState.selectionMode && !uiState.isLoading) {
+                if (uiState.selectedCategoryId == null) {
+                    uiState.continueReading?.let { book ->
+                        ContinueReadingCard(book = book, onOpen = { onBookClick(book) })
+                    }
+                }
+                ShelfHeader(
+                    label = if (uiState.selectedCategoryId == null) "All books" else title,
+                    count = uiState.books.size,
+                    sortOption = uiState.sortOption,
+                    onSortSelected = onSortSelected,
+                )
+            }
+
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     uiState.isLoading -> Unit
@@ -607,6 +700,8 @@ private fun BookGrid(
 ) {
     val gridState = rememberLazyGridState()
     val localBooks = remember(uiState.books) { uiState.books.toMutableStateList() }
+    // O(1) ribbon lookup per card; a linear scan would run per item per recomposition.
+    val categoriesById = remember(uiState.categories) { uiState.categories.associateBy { it.id } }
 
     val dragState = rememberGridDragState(
         gridState = gridState,
@@ -625,17 +720,17 @@ private fun BookGrid(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = 110.dp),
+        columns = GridCells.Adaptive(minSize = 116.dp),
         state = gridState,
         modifier = gridModifier.fillMaxSize(),
-        contentPadding = PaddingValues(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(18.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         itemsIndexed(localBooks, key = { _, book -> book.id }) { index, book ->
             BookCard(
                 book = book,
-                category = uiState.categories.firstOrNull { it.id == book.categoryId },
+                category = book.categoryId?.let { categoriesById[it] },
                 downloadStatus = uiState.downloads[book.id],
                 selectionMode = uiState.selectionMode,
                 isSelected = book.id in uiState.selectedBookIds,
@@ -672,6 +767,7 @@ private fun AssignCategoryDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = CardShape,
         title = { Text(book.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
         text = {
             Column {
@@ -721,6 +817,7 @@ private fun DeleteBookDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = CardShape,
         title = { Text("Delete book") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -778,10 +875,10 @@ private fun CategoryChoiceRow(
     }
 }
 
-/** Palette offered for categories; a hue slider covers everything else. */
+/** Warm "cloth" palette offered for categories; a hue slider covers the rest. */
 private val categoryPalette = listOf(
-    0xFF00897B, 0xFF7B1FA2, 0xFFC62828, 0xFFEF6C00,
-    0xFF2E7D32, 0xFF1565C0, 0xFF6D4C41, 0xFF546E7A,
+    0xFFC1683C, 0xFF3E7F79, 0xFF82577E, 0xFFC39B45,
+    0xFF536493, 0xFFA8493A, 0xFF5E7B54, 0xFF6B7078,
 ).map { Color(it) }
 
 /** Shared create/edit dialog: name field, palette, hue slider, optional delete. */
@@ -805,6 +902,7 @@ private fun CategoryEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = CardShape,
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -911,33 +1009,206 @@ private fun UploadMenu(
     }
 }
 
+/** Pill surfacing the current sort; tapping opens the full sort menu. */
 @Composable
-private fun SortMenu(
+private fun SortChip(
     selected: BookSortOption,
     onSortSelected: (BookSortOption) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    IconButton(onClick = { expanded = true }) {
-        Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Sort library")
-    }
-    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-        BookSortOption.entries.forEach { option ->
-            DropdownMenuItem(
-                text = { Text(option.label) },
-                trailingIcon = {
-                    if (option == selected) {
-                        Icon(Icons.Default.Check, contentDescription = null)
-                    }
-                },
-                onClick = {
-                    expanded = false
-                    onSortSelected(option)
-                },
+    Box {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            // minimumInteractiveComponentSize keeps the 48dp touch target the
+            // old IconButton provided; the visual pill stays compact.
+            modifier = Modifier
+                .minimumInteractiveComponentSize()
+                .clip(CircleShape)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CircleShape)
+                .clickable { expanded = true }
+                .padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+        ) {
+            Icon(
+                Icons.AutoMirrored.Filled.List,
+                contentDescription = "Sort library",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
             )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                text = selected.chipLabel,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Icon(
+                Icons.Default.KeyboardArrowDown,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            BookSortOption.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.label) },
+                    trailingIcon = {
+                        if (option == selected) {
+                            Icon(Icons.Default.Check, contentDescription = null)
+                        }
+                    },
+                    onClick = {
+                        expanded = false
+                        onSortSelected(option)
+                    },
+                )
+            }
         }
     }
 }
+
+/** Eyebrow (shelf name · count) on the left, sort chip on the right. */
+@Composable
+private fun ShelfHeader(
+    label: String,
+    count: Int,
+    sortOption: BookSortOption,
+    onSortSelected: (BookSortOption) -> Unit,
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 18.dp, end = 12.dp, top = 12.dp, bottom = 4.dp),
+    ) {
+        Eyebrow(
+            text = "$label · $count",
+            modifier = Modifier.weight(1f),
+        )
+        SortChip(selected = sortOption, onSortSelected = onSortSelected)
+    }
+}
+
+/** The fine 4dp accent progress rail shared by the grid cards and the hero. */
+@Composable
+private fun BookProgressRail(progress: Float, modifier: Modifier = Modifier) {
+    LinearProgressIndicator(
+        progress = { progress },
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+        strokeCap = StrokeCap.Round,
+        gapSize = 0.dp,
+        drawStopIndicator = NoStopIndicator,
+        modifier = modifier
+            .height(4.dp)
+            .clip(RailShape),
+    )
+}
+
+/**
+ * A book cover: the image when present, else a generated cover — the title set
+ * in cloth ink on cream paper. Ribbons/overlays layer on via [content].
+ */
+@Composable
+private fun BookCover(
+    book: Book,
+    titleStyle: TextStyle,
+    titlePadding: Dp,
+    modifier: Modifier = Modifier,
+    contentDescription: String? = null,
+    content: @Composable BoxScope.() -> Unit = {},
+) {
+    Box(
+        modifier = modifier
+            .clip(CoverShape)
+            .background(PlaceholderPaper),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (book.coverPath != null) {
+            AsyncImage(
+                model = File(book.coverPath),
+                contentDescription = contentDescription,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text(
+                text = book.title,
+                style = titleStyle,
+                color = book.placeholderCoverColor(),
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(titlePadding),
+            )
+        }
+        content()
+    }
+}
+
+/** Horizontal hero surfacing the book to resume; tapping opens the reader. */
+@Composable
+private fun ContinueReadingCard(book: Book, onOpen: () -> Unit) {
+    Column(modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 16.dp)) {
+        Eyebrow("Continue reading")
+        Spacer(Modifier.height(8.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(CardShape)
+                .background(MaterialTheme.colorScheme.surface)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CardShape)
+                .clickable(onClick = onOpen)
+                .padding(14.dp),
+        ) {
+            BookCover(
+                book = book,
+                titleStyle = MaterialTheme.typography.labelMedium,
+                titlePadding = 6.dp,
+                modifier = Modifier
+                    .width(66.dp)
+                    .height(99.dp),
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = book.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = book.author,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.height(10.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BookProgressRail(progress = book.progress, modifier = Modifier.weight(1f))
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        text = "${(book.progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Chapter ${book.lastChapterIndex + 1}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** Tiny English pluralizer for the drawer counts. */
+private fun plural(n: Int, one: String, many: String = one + "s"): String =
+    if (n == 1) one else many
 
 private val BookSortOption.label: String
     get() = when (this) {
@@ -946,6 +1217,16 @@ private val BookSortOption.label: String
         BookSortOption.AUTHOR -> "Author"
         BookSortOption.DATE_ADDED -> "Recently added"
         BookSortOption.CUSTOM -> "My order (drag to arrange)"
+    }
+
+/** Short form for the sort chip (the full [label] is too long for a pill). */
+private val BookSortOption.chipLabel: String
+    get() = when (this) {
+        BookSortOption.TITLE_NATURAL -> "Title"
+        BookSortOption.TITLE_LEXICOGRAPHIC -> "A–Z"
+        BookSortOption.AUTHOR -> "Author"
+        BookSortOption.DATE_ADDED -> "Recent"
+        BookSortOption.CUSTOM -> "My order"
     }
 
 @Composable
@@ -961,39 +1242,24 @@ private fun BookCard(
         // Not-yet-downloaded books read as dimmed until their bytes arrive.
         modifier = modifier.alpha(if (book.isDownloaded) 1f else 0.6f),
     ) {
-        Box(
+        BookCover(
+            book = book,
+            titleStyle = MaterialTheme.typography.titleSmall,
+            titlePadding = 10.dp,
+            contentDescription = "Cover of ${book.title}",
             modifier = Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.7f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(book.placeholderCoverColor()),
-            contentAlignment = Alignment.Center,
+                .aspectRatio(0.667f),
         ) {
-            if (book.coverPath != null) {
-                AsyncImage(
-                    model = File(book.coverPath),
-                    contentDescription = "Cover of ${book.title}",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                Text(
-                    text = book.title,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = Color.White,
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(8.dp),
-                )
-            }
-
-            // Category ribbon in the cover's top corner.
+            // Category ribbon: a cloth bookmark flush to the cover's top edge.
             if (category != null) {
                 CategoryTag(
                     color = Color(category.colorArgb),
+                    width = 15.dp,
+                    height = 24.dp,
                     modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(top = 8.dp),
+                        .align(Alignment.TopEnd)
+                        .padding(end = 10.dp),
                 )
             }
 
@@ -1036,23 +1302,24 @@ private fun BookCard(
             }
         }
         if (book.progress > 0f) {
-            LinearProgressIndicator(
-                progress = { book.progress },
+            BookProgressRail(
+                progress = book.progress,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 4.dp),
+                    .padding(top = 6.dp),
             )
         }
         Text(
             text = book.title,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 6.dp),
         )
         Text(
             text = book.author,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -1141,14 +1408,22 @@ private fun BoxScope.DownloadOverlay(book: Book, status: DownloadStatus?) {
     }
 }
 
+/** Warm cloth ink tones for generated placeholder covers (the serif title color
+ *  on a cream paper ground). */
 private val coverPalette = listOf(
-    Color(0xFF1B4D3E),
-    Color(0xFF3E5C76),
-    Color(0xFF6D435A),
-    Color(0xFF7A542E),
-    Color(0xFF4A5240),
+    Color(0xFF6B4A3A),
+    Color(0xFF3E5C4E),
+    Color(0xFF43566B),
+    Color(0xFF7A4A52),
+    Color(0xFF5C5140),
     Color(0xFF513B56),
+    Color(0xFF4A4E6B),
 )
 
+/** The cream paper ground behind a generated placeholder cover. */
+private val PlaceholderPaper = Color(0xFFEFE6D4)
+
+// mod (not absoluteValue + %) — abs(Int.MIN_VALUE) is still negative and would
+// index out of bounds; floored mod is non-negative for any hash.
 private fun Book.placeholderCoverColor(): Color =
-    coverPalette[title.hashCode().absoluteValue % coverPalette.size]
+    coverPalette[title.hashCode().mod(coverPalette.size)]

@@ -183,4 +183,35 @@ class ObserveLibraryUseCaseTest {
 
         assertEquals(2, result.size)
     }
+
+    @Test
+    fun `snapshot picks the furthest-along open downloaded book as the hero`() = runTest {
+        val mixed = listOf(
+            book(1, "A").copy(progress = 0.2f, filePath = "/a"),
+            book(2, "B").copy(progress = 0.8f, filePath = "/b"),
+            book(3, "C").copy(progress = 1f, filePath = "/c"), // finished — excluded
+            book(4, "D").copy(progress = 0.5f), // not downloaded — excluded
+            book(5, "E"), // untouched — excluded
+        )
+        val useCase = ObserveLibraryUseCase(repositoryOf(mixed))
+
+        val snapshot = useCase.snapshot(BookSortOption.TITLE_NATURAL).first()
+
+        assertEquals(2L, snapshot.continueReading?.id)
+    }
+
+    @Test
+    fun `snapshot's hero and count ignore the active category filter`() = runTest {
+        val shelved = listOf(
+            book(1, "Shelved").copy(categoryId = 7),
+            book(2, "Reading").copy(progress = 0.4f, filePath = "/b"),
+        )
+        val useCase = ObserveLibraryUseCase(repositoryOf(shelved))
+
+        val snapshot = useCase.snapshot(BookSortOption.TITLE_NATURAL, categoryId = 7).first()
+
+        assertEquals(listOf("Shelved"), snapshot.books.map { it.title })
+        assertEquals(2L, snapshot.continueReading?.id)
+        assertEquals(2, snapshot.totalCount)
+    }
 }

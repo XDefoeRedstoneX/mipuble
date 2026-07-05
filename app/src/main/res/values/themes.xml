@@ -3,8 +3,9 @@
     <!--
       Base XML theme for the Activity window. The actual UI colors are driven by
       Compose (MipubleTheme); this only styles the window before Compose draws.
+      values-night/ supplies the "Ink" cold-start background.
     -->
     <style name="Theme.Mipuble" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:windowBackground">@color/paper</item>
     </style>
 </resources>
